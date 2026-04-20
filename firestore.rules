@@ -1,0 +1,57 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isAdmin() {
+      return request.auth != null && request.auth.uid == "dGcKysUwFZNfkur2SS3G2UERX242";
+    }
+
+    function isPoster() {
+      return request.auth != null && request.auth.uid in [
+        "VALLE_UID_PLACEHOLDER",
+        "FILLE_UID_PLACEHOLDER",
+        "VARING_UID_PLACEHOLDER",
+        "DRUFFE_UID_PLACEHOLDER"
+      ];
+    }
+
+    function canPost() {
+      return isAdmin() || isPoster();
+    }
+
+    function isPosterAutoDayCreate(dayId) {
+      // Simplified validation for flexible timeline (removed dayNumber)
+      return request.resource.data.keys().hasOnly([
+        "date",
+        "dateKey",
+        "title",
+        "description",
+        "itinerary",
+        "createdAt",
+        "updatedAt"
+      ])
+      && request.resource.data.dateKey == dayId
+      && request.resource.data.date is timestamp
+      && request.resource.data.title is string
+      && request.resource.data.description == ""
+      && request.resource.data.itinerary == "";
+    }
+
+    match /media/{mediaId} {
+      allow read: if true;
+      allow create: if canPost();
+      allow update, delete: if isAdmin();
+    }
+
+    match /days/{dayId} {
+      allow read: if true;
+      allow create: if isAdmin() || (isPoster() && isPosterAutoDayCreate(dayId));
+      allow update, delete: if isAdmin();
+    }
+
+    match /comments/{commentId} {
+      allow read: if true;
+      allow create: if true;
+      allow update, delete: if false;
+    }
+  }
+}

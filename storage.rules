@@ -1,0 +1,31 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    function isAdmin() {
+      return request.auth != null && request.auth.uid == "dGcKysUwFZNfkur2SS3G2UERX242";
+    }
+
+    function isPoster() {
+      return request.auth != null && request.auth.uid in [
+        "VALLE_UID_PLACEHOLDER",
+        "FILLE_UID_PLACEHOLDER",
+        "VARING_UID_PLACEHOLDER",
+        "DRUFFE_UID_PLACEHOLDER"
+      ];
+    }
+
+    function canPost() {
+      return isAdmin() || isPoster();
+    }
+
+    match /media/{allPaths=**} {
+      allow read: if true;
+      allow write: if canPost();
+    }
+
+    match /thumbnails/{allPaths=**} {
+      allow read: if true;
+      allow write: if canPost();
+    }
+  }
+}
