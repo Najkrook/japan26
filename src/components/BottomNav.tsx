@@ -34,12 +34,14 @@ const BottomNav: React.FC<BottomNavProps> = ({ activeTab, onTabChange }) => {
           bottom: 0;
           left: 0;
           right: 0;
-          background: rgba(255, 255, 255, 0.95);
-          backdrop-filter: blur(12px);
-          padding: 1rem 0.5rem calc(1rem + env(safe-area-inset-bottom));
-          border-radius: 2rem 2rem 0 0;
+          background: rgba(252, 249, 242, 0.82); /* Matches --neutral */
+          backdrop-filter: blur(20px) saturate(180%);
+          -webkit-backdrop-filter: blur(20px) saturate(180%);
+          padding: 0.9rem 1rem calc(0.9rem + env(safe-area-inset-bottom));
+          border-top: 1px solid rgba(188, 0, 45, 0.06);
+          border-radius: 24px 24px 0 0;
           z-index: 1000;
-          box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.03);
+          box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.04);
         }
 
         .nav-container {

@@ -36,79 +36,92 @@ const Header: React.FC<HeaderProps> = ({ canPost, onToggleAdminPanel, onLoginCli
           position: sticky;
           top: 0;
           z-index: 100;
-          padding: 1rem 0;
-          background: rgba(250, 249, 246, 0.9);
-          backdrop-filter: blur(10px);
-          border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+          padding: 1.25rem 0;
+          background: rgba(252, 249, 242, 0.85); /* Matches --neutral with opacity */
+          backdrop-filter: blur(14px) saturate(160%);
+          -webkit-backdrop-filter: blur(14px) saturate(160%);
+          border-bottom: 1px solid rgba(188, 0, 45, 0.04);
+          transition: all 0.3s ease;
         }
 
         .header-content {
           max-width: 1200px;
           margin: 0 auto;
-          padding: 0 1.5rem;
+          padding: 0 2rem;
           display: grid;
           grid-template-columns: 1fr auto 1fr;
           align-items: center;
         }
 
         .hanko-seal {
-          width: 32px;
-          height: 32px;
-          border-radius: 50%;
-          background: var(--tertiary);
+          width: 36px;
+          height: 36px;
+          border-radius: 8px; /* Square with slight rounding for more authentic seal look */
+          background: rgba(188, 0, 45, 0.03);
           color: var(--primary);
           display: flex;
           align-items: center;
           justify-content: center;
-          border: 1px solid rgba(188, 0, 45, 0.1);
-          transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275), box-shadow 0.2s;
+          border: 1px solid rgba(188, 0, 45, 0.15);
+          transition: all 0.4s cubic-bezier(0.19, 1, 0.22, 1);
           cursor: pointer;
         }
 
         .hanko-seal:hover {
-          transform: rotate(-15deg) scale(1.15);
-          box-shadow: 0 4px 12px rgba(188, 0, 45, 0.2);
+          transform: rotate(-10deg) scale(1.1);
+          background: rgba(188, 0, 45, 0.08);
+          box-shadow: 0 4px 15px rgba(188, 0, 45, 0.1);
         }
 
         .seal-text {
           font-family: var(--font-heading);
-          font-size: 0.8rem;
+          font-size: 0.9rem;
           font-weight: 700;
+          opacity: 0.85;
         }
 
         .header-actions {
           justify-self: end;
           display: flex;
-          gap: 0.25rem;
+          gap: 0.75rem;
           align-items: center;
         }
 
         .header-icon-btn {
-          color: var(--primary);
-          width: 36px;
-          height: 36px;
+          color: var(--text-dim);
+          width: 40px;
+          height: 40px;
           display: flex;
           align-items: center;
           justify-content: center;
-          border-radius: 50%;
+          border-radius: 12px;
+          background: transparent;
         }
 
         .header-icon-btn:hover {
-          background: var(--tertiary);
+          background: rgba(188, 0, 45, 0.05);
+          color: var(--primary);
+          transform: translateY(-2px);
         }
 
         .logo-text h1 {
           font-family: var(--font-heading);
-          font-size: 1.4rem;
-          color: var(--primary);
+          font-size: 1.6rem;
+          color: var(--text-main);
           font-weight: 700;
           font-style: italic;
-          letter-spacing: 0.02em;
+          letter-spacing: -0.01em;
+          background: linear-gradient(135deg, var(--text-main) 0%, var(--primary) 150%);
+          -webkit-background-clip: text;
+          -webkit-text-fill-color: transparent;
         }
 
         @media (max-width: 640px) {
+          .header-content {
+            padding: 0 1rem;
+          }
           .logo-text h1 {
-            font-size: 1.25rem;
+            font-size: 1.35rem;
           }
         }
       `}</style>

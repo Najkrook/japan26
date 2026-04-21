@@ -118,7 +118,10 @@ function App() {
           data-loading-copy={loadingMediaLabel}
         >
           <div className="ethereal-cover fade-in">
-            <h1 className="cover-title">Japan<br />2026</h1>
+            <div className="cover-title-stack">
+              <span className="cover-title">Japan</span>
+              <span className="cover-year">2026</span>
+            </div>
             <p className="cover-description">
               Följ vårt äventyr i Japan 🌸🗾🍙.
             </p>
@@ -279,49 +282,89 @@ function App() {
 
         .ethereal-cover {
           text-align: center;
-          margin-bottom: 5rem;
+          margin-bottom: 8rem;
+          margin-top: 4rem;
           position: relative;
           z-index: 10;
+          /* Force centering within the narrow content column */
+          margin-left: auto;
+          margin-right: auto;
+        }
+
+        .cover-title-stack {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          line-height: 0.9;
+          margin-bottom: 2.5rem;
         }
 
         .cover-title {
           font-family: var(--font-heading);
-          font-size: 3.5rem;
-          line-height: 1.1;
+          font-size: clamp(3.5rem, 8vw, 7rem);
+          line-height: 1;
+          letter-spacing: -0.04em;
+          font-weight: 700;
+          /* Gradient: dark at top, red at bottom — fixed stop so red is reachable */
+          background: linear-gradient(175deg, var(--text-main) 0%, var(--primary) 100%);
+          -webkit-background-clip: text;
+          -webkit-text-fill-color: transparent;
+          background-clip: text;
+          display: block;
+        }
+
+        .cover-year {
+          font-family: var(--font-heading);
+          font-size: clamp(2.5rem, 6.5vw, 6rem);
+          line-height: 1;
+          letter-spacing: -0.03em;
+          font-weight: 400;
+          font-style: italic;
+          /* Year is in red — gives a clear two-tone effect */
           color: var(--primary);
-          margin-bottom: 1.5rem;
-          letter-spacing: 0.02em;
+          opacity: 0.85;
+          display: block;
         }
 
         .cover-description {
           font-family: var(--font-main);
-          font-size: 1.05rem;
-          line-height: 1.7;
+          font-size: clamp(1rem, 1.5vw, 1.2rem);
+          line-height: 1.8;
           color: var(--text-dim);
-          max-width: 80%;
+          max-width: 480px;
           margin: 0 auto;
+          font-style: italic;
+          opacity: 0.85;
         }
 
         .empty-state-main {
           text-align: center;
-          padding: 6rem 2rem;
+          padding: 8rem 2rem;
           color: var(--text-muted);
+          background: rgba(255, 255, 255, 0.4);
+          border-radius: var(--radius-lg);
+          border: 1px solid var(--glass-border);
+          backdrop-filter: blur(8px);
         }
 
         .empty-icon-large {
-          color: var(--secondary-dark);
+          color: var(--secondary);
           margin-bottom: 2rem;
-          opacity: 0.5;
+          opacity: 0.6;
         }
 
         @media (max-width: 768px) {
+          .ethereal-cover {
+            margin-bottom: 5rem;
+            margin-top: 2rem;
+          }
           .cover-title {
-            font-size: 2.75rem;
+            font-size: 3.5rem;
           }
 
           .cover-description {
-            max-width: 95%;
-            font-size: 1rem;
+            max-width: 90%;
+            font-size: 1.05rem;
           }
         }
       `}</style>

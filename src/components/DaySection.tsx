@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useInView } from 'react-intersection-observer';
+import { motion } from 'framer-motion';
 import { Image as ImageIcon, Loader2, Edit3, Check, X } from 'lucide-react';
 import { useMedia } from '../hooks/useMedia';
 import { useDayCommentCounts } from '../hooks/useDayCommentCounts';
@@ -28,10 +29,11 @@ const DaySection: React.FC<DaySectionProps> = ({
   onDeleteDay,
   onDeleteMedia,
 }) => {
-  const { ref } = useInView({
-    rootMargin: '-20% 0px -60% 0px',
-    onChange: (inView) => {
-      if (inView) {
+  const { ref, inView } = useInView({
+    rootMargin: '-10% 0px -30% 0px',
+    triggerOnce: true, // Only animate in once
+    onChange: (visible) => {
+      if (visible) {
         onVisible(day.id);
       }
     },
@@ -69,15 +71,22 @@ const DaySection: React.FC<DaySectionProps> = ({
   // Extract day and month for the specific design
   const dateObj = day.date;
   const monthNames = ["Januari", "Februari", "Mars", "April", "Maj", "Juni", "Juli", "Augusti", "September", "Oktober", "November", "December"];
-  const dateStr = `${dateObj.getDate()} ${monthNames[dateObj.getMonth()].toUpperCase()}`;
-  const locationStr = day.location ? ` • ${day.location.toUpperCase()}` : '';
-  const dateFormatted = `${dateStr}${locationStr}`.toUpperCase();
+  const dateStr = `${dateObj.getDate()} ${monthNames[dateObj.getMonth()]}`;
+  const locationStr = day.location ? ` — ${day.location}` : '';
+  const dateFormatted = `${dateStr}${locationStr}`;
   
   const defaultTitle = formatDateSwedish(day.date);
   const isDefaultOrSimilar = day.title.toLowerCase() === defaultTitle.toLowerCase() || day.title.toLowerCase() === dateFormatted.toLowerCase();
 
   return (
-    <div className="day-wrapper fade-in" ref={ref} id={`day-${day.id}`}>
+    <motion.div 
+      className="day-wrapper" 
+      ref={ref} 
+      id={`day-${day.id}`}
+      initial={{ opacity: 0, y: 30 }}
+      animate={inView ? { opacity: 1, y: 0 } : {}}
+      transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
+    >
       {!mediaLoading && media.length > 0 && <div className="timeline-dot" />}
       <article className="journal-card">
         <div className="card-header">
@@ -90,7 +99,7 @@ const DaySection: React.FC<DaySectionProps> = ({
               onClick={handleDeleteDay}
               title="Ta bort inlägg"
             >
-              <X size={24} />
+              <X size={20} />
             </button>
           )}
         </div>
@@ -102,7 +111,7 @@ const DaySection: React.FC<DaySectionProps> = ({
                 type="text"
                 value={draftLocation}
                 onChange={(e) => setDraftLocation(e.target.value)}
-                placeholder="Ev. stadsnamn (t.ex. Osaka)"
+                placeholder="Plats (t.ex. Tokyo)"
                 className="editor-input-short"
                 disabled={isSaving}
               />
@@ -180,95 +189,102 @@ const DaySection: React.FC<DaySectionProps> = ({
       <style>{`
         .day-wrapper {
           position: relative;
-          margin-bottom: 4rem;
+          margin-bottom: 5rem;
         }
 
         .card-header {
           position: relative;
-          margin-bottom: 1.5rem;
+          margin-bottom: 2rem;
         }
 
         .card-delete-trigger {
           position: absolute;
           top: -0.5rem;
-          right: -0.5rem;
+          right: -1rem;
           padding: 0.5rem;
-          color: var(--primary);
-          opacity: 0.4;
-          transition: all 0.2s;
+          color: var(--text-muted);
+          opacity: 0.3;
+          transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
           border-radius: 50%;
         }
 
         .card-delete-trigger:hover {
           opacity: 1;
+          color: var(--primary);
           background: rgba(188, 0, 45, 0.05);
           transform: scale(1.1);
         }
 
         .card-date {
           color: var(--primary);
-          font-weight: 700;
-          font-size: 0.75rem;
-          margin-bottom: 0.75rem;
+          font-weight: 500;
+          font-size: 0.85rem;
+          margin-bottom: 0.5rem;
           font-family: var(--font-main);
+          letter-spacing: 0.05em;
           text-transform: uppercase;
-          letter-spacing: 0.12em;
           opacity: 0.8;
+          font-style: italic;
         }
 
         .card-title {
-          font-size: 2.25rem;
-          line-height: 1.15;
+          font-size: 2.75rem;
+          line-height: 1.1;
           color: var(--text-main);
-          letter-spacing: -0.01em;
+          letter-spacing: -0.02em;
+          font-weight: 700;
         }
 
         .card-body {
-          margin-bottom: 2rem;
+          margin-bottom: 2.5rem;
         }
 
         .card-body-text {
           color: var(--text-dim);
-          font-size: 1.15rem;
-          line-height: 1.6;
+          font-size: 1.25rem;
+          line-height: 1.65;
+          letter-spacing: -0.01em;
         }
 
         .editor-input-short {
           width: 100%;
-          background: rgba(255, 255, 255, 0.5);
+          background: rgba(255, 255, 255, 0.6);
           border: 1px solid rgba(0,0,0,0.05);
           border-radius: var(--radius-sm);
-          padding: 0.75rem 1rem;
+          padding: 0.85rem 1.25rem;
           font-family: var(--font-main);
-          font-size: 0.9rem;
+          font-size: 0.95rem;
           font-weight: 600;
           color: var(--primary);
-          margin-bottom: 0.5rem;
+          margin-bottom: 0.75rem;
           outline: none;
         }
 
         .inline-edit-trigger {
           display: flex;
           align-items: center;
-          gap: 0.5rem;
+          gap: 0.6rem;
           color: var(--primary);
-          opacity: 0.6;
-          font-size: 0.85rem;
+          opacity: 0.45;
+          font-size: 0.9rem;
           font-weight: 500;
-          margin-top: 1rem;
-          padding: 0.5rem 0;
-          transition: opacity 0.2s;
+          margin-top: 1.5rem;
+          padding: 0.6rem 0;
+          transition: all 0.2s;
         }
 
         .inline-edit-trigger:hover {
           opacity: 1;
+          transform: translateX(4px);
         }
 
         .inline-editor {
-          margin-top: 1.5rem;
-          background: var(--neutral);
+          margin-top: 2rem;
+          background: rgba(255, 255, 255, 0.5);
+          border: 1px solid var(--glass-border);
           border-radius: var(--radius-md);
-          padding: 0.5rem;
+          padding: 0.75rem;
+          backdrop-filter: blur(8px);
         }
 
         .editor-textarea {
@@ -276,9 +292,9 @@ const DaySection: React.FC<DaySectionProps> = ({
           background: transparent;
           border: none;
           resize: vertical;
-          padding: 1rem;
+          padding: 1.25rem;
           font-family: var(--font-main);
-          font-size: 1rem;
+          font-size: 1.1rem;
           line-height: 1.6;
           color: var(--text-main);
           outline: none;
@@ -287,17 +303,17 @@ const DaySection: React.FC<DaySectionProps> = ({
         .editor-actions {
           display: flex;
           justify-content: flex-end;
-          gap: 0.5rem;
-          padding: 0.5rem 1rem 0.5rem;
+          gap: 0.75rem;
+          padding: 0.5rem 1.25rem 0.75rem;
         }
 
         .editor-btn {
           display: flex;
           align-items: center;
-          gap: 0.35rem;
-          padding: 0.4rem 1rem;
+          gap: 0.4rem;
+          padding: 0.5rem 1.25rem;
           border-radius: var(--radius-full);
-          font-size: 0.85rem;
+          font-size: 0.9rem;
           font-weight: 600;
         }
 
@@ -306,34 +322,42 @@ const DaySection: React.FC<DaySectionProps> = ({
         }
 
         .editor-btn.cancel:hover {
-          background: rgba(0,0,0,0.05);
+          background: rgba(0,0,0,0.04);
         }
 
         .editor-btn.save {
           background: var(--primary);
           color: white;
+          box-shadow: 0 4px 12px rgba(188, 0, 45, 0.2);
         }
 
         .editor-btn.save:hover {
           background: var(--primary-hover);
+          transform: translateY(-1px);
         }
 
         .empty-state-card {
-          padding: 3rem 1rem;
+          padding: 4rem 1.5rem;
           text-align: center;
-          background: var(--neutral);
+          background: rgba(0,0,0,0.02);
           border-radius: var(--radius-md);
           color: var(--text-muted);
-          border: 1px dashed var(--secondary-dark);
+          border: 1px dashed rgba(0,0,0,0.08);
         }
 
         @media (max-width: 640px) {
           .card-title {
-            font-size: 1.75rem;
+            font-size: 2.25rem;
+          }
+          .card-body-text {
+            font-size: 1.15rem;
+          }
+          .journal-card {
+            padding: 2rem 1.5rem;
           }
         }
       `}</style>
-    </div>
+    </motion.div>
   );
 };
 
