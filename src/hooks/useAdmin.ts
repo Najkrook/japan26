@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { onAuthStateChanged, signInWithRedirect, getRedirectResult, signOut, type User } from 'firebase/auth';
+import { onAuthStateChanged, signInWithPopup, signOut, type User } from 'firebase/auth';
 import { auth, googleProvider } from '../config/firebase';
 import { getHardcodedAccountByUid } from '../config/hardcodedAccounts';
 import type { HardcodedAccountProfile, UserRole } from '../types';
@@ -14,11 +14,6 @@ export const useAdmin = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Check if the user is returning from a Google redirect login
-    getRedirectResult(auth).catch(() => {
-      // Silently ignore redirect errors — onAuthStateChanged handles the rest
-    });
-
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
       if (!firebaseUser) {
         setUser(null);
@@ -48,11 +43,20 @@ export const useAdmin = () => {
   }, []);
 
   const loginWithGoogle = async (): Promise<HardcodedAccountProfile | null> => {
-    // Redirect the entire page to Google's login — no popup needed
-    await signInWithRedirect(auth, googleProvider);
-    // This line is never reached; the page navigates away.
-    // When the user returns, onAuthStateChanged fires automatically.
-    return null;
+    const result = await signInWithPopup(auth, googleProvider);
+    const authorizedProfile = getHardcodedAccountByUid(result.user.uid);
+
+    if (!authorizedProfile) {
+      setUser(result.user);
+      setProfile(null);
+      setAuthorizationError(getUnauthorizedMessage());
+      return null;
+    }
+
+    setUser(result.user);
+    setProfile(authorizedProfile);
+    setAuthorizationError(null);
+    return authorizedProfile;
   };
 
   const logout = async () => {
