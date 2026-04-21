@@ -30,9 +30,11 @@ const AdminLogin: React.FC<AdminLoginProps> = ({ onLogin, onClose, loading = fal
 
         <div className="modal-header">
           <div className="icon-wrapper">
-            <ShieldCheck size={32} />
+            <div className="icon-circle">
+              <ShieldCheck size={28} />
+            </div>
           </div>
-          <h2>Logga in med Google</h2>
+          <h2>Logga in</h2>
           <p>Bara godkända konton får uppladdningsåtkomst och adminbehörighet.</p>
         </div>
 
@@ -44,7 +46,9 @@ const AdminLogin: React.FC<AdminLoginProps> = ({ onLogin, onClose, loading = fal
         )}
 
         <button className="google-login-btn" onClick={() => void onLogin()} disabled={loading}>
-          <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" />
+          <div className="google-icon-wrapper">
+            <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" />
+          </div>
           <span>{loading ? 'Loggar in...' : 'Fortsätt med Google'}</span>
         </button>
 
@@ -60,64 +64,89 @@ const AdminLogin: React.FC<AdminLoginProps> = ({ onLogin, onClose, loading = fal
           left: 0;
           right: 0;
           bottom: 0;
-          background: rgba(29, 31, 35, 0.45);
-          backdrop-filter: blur(14px);
+          background: rgba(42, 42, 46, 0.4);
+          backdrop-filter: blur(16px);
           display: flex;
           align-items: center;
           justify-content: center;
           z-index: 2000;
-          padding: 1rem;
+          padding: 1.5rem;
         }
 
         .admin-modal {
           width: 100%;
-          max-width: 400px;
-          padding: 3rem 2rem;
+          max-width: 380px;
+          padding: 3.5rem 2rem 2.5rem;
           border-radius: var(--radius-lg);
           text-align: center;
           position: relative;
-          border: 1px solid rgba(255, 255, 255, 0.1);
+          background: rgba(255, 255, 255, 0.7);
+          border: 1px solid rgba(255, 255, 255, 0.5);
+          box-shadow: 0 25px 50px -12px rgba(188, 0, 45, 0.15);
         }
 
         .close-btn {
           position: absolute;
-          top: 1.5rem;
-          right: 1.5rem;
+          top: 1.25rem;
+          right: 1.25rem;
           color: var(--text-muted);
-          transition: color 0.2s;
+          width: 36px;
+          height: 36px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          border-radius: 50%;
+          transition: all 0.2s ease;
         }
 
         .close-btn:hover {
-          color: var(--text-main);
+          color: var(--primary);
+          background: rgba(188, 0, 45, 0.05);
+          transform: rotate(90deg);
         }
 
         .icon-wrapper {
-          color: var(--primary);
-          margin-bottom: 1.5rem;
           display: flex;
           justify-content: center;
+          margin-bottom: 2rem;
+        }
+
+        .icon-circle {
+          width: 64px;
+          height: 64px;
+          background: linear-gradient(135deg, var(--tertiary) 0%, var(--secondary) 100%);
+          border-radius: 20px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: var(--primary);
+          box-shadow: 0 10px 20px rgba(188, 0, 45, 0.1);
+          transform: rotate(-10deg);
         }
 
         .modal-header h2 {
-          font-size: 1.5rem;
-          margin-bottom: 0.75rem;
+          font-family: var(--font-heading);
+          font-size: 1.75rem;
+          margin-bottom: 1rem;
           color: var(--text-main);
+          letter-spacing: -0.01em;
         }
 
         .modal-header p {
           color: var(--text-dim);
           font-size: 0.95rem;
-          line-height: 1.5;
+          line-height: 1.6;
           margin-bottom: 2.5rem;
+          padding: 0 1rem;
         }
 
         .error-box {
-          background: rgba(193, 62, 49, 0.1);
-          border: 1px solid var(--primary);
+          background: rgba(188, 0, 45, 0.08);
+          border: 1px solid rgba(188, 0, 45, 0.15);
           color: var(--primary);
-          padding: 0.75rem 1rem;
+          padding: 1rem;
           border-radius: var(--radius-sm);
-          margin-bottom: 1.5rem;
+          margin-bottom: 2rem;
           display: flex;
           align-items: center;
           gap: 0.75rem;
@@ -128,22 +157,35 @@ const AdminLogin: React.FC<AdminLoginProps> = ({ onLogin, onClose, loading = fal
         .google-login-btn {
           width: 100%;
           background: white;
-          color: rgba(0, 0, 0, 0.6);
-          padding: 0.75rem;
+          color: #3C4043;
+          padding: 0.5rem;
+          padding-right: 1.5rem;
           border-radius: var(--radius-sm);
           font-weight: 600;
+          font-size: 0.95rem;
           display: flex;
           align-items: center;
-          justify-content: center;
-          gap: 1rem;
-          transition: all 0.2s;
-          box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+          gap: 1.25rem;
+          transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+          border: 1px solid #DADCE0;
+          box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+        }
+
+        .google-icon-wrapper {
+          background: white;
+          padding: 0.5rem;
+          border-radius: 8px;
         }
 
         .google-login-btn:hover:not(:disabled) {
-          background: #f8f8f8;
-          transform: translateY(-1px);
-          box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+          background: #fdfdfd;
+          border-color: #BEC1C5;
+          transform: translateY(-2px);
+          box-shadow: 0 8px 16px rgba(0, 0, 0, 0.08);
+        }
+
+        .google-login-btn:active:not(:disabled) {
+          transform: translateY(0);
         }
 
         .google-login-btn img {
@@ -154,17 +196,19 @@ const AdminLogin: React.FC<AdminLoginProps> = ({ onLogin, onClose, loading = fal
         .google-login-btn:disabled {
           opacity: 0.65;
           cursor: not-allowed;
+          filter: grayscale(1);
         }
 
         .modal-footer {
-          margin-top: 2rem;
+          margin-top: 3rem;
           padding-top: 1.5rem;
-          border-top: 1px solid var(--border-color);
+          border-top: 1px solid rgba(188, 0, 45, 0.05);
         }
 
         .modal-footer p {
-          font-size: 0.75rem;
+          font-size: 0.8rem;
           color: var(--text-muted);
+          font-style: italic;
         }
       `}</style>
     </motion.div>

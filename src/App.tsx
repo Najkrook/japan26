@@ -72,8 +72,10 @@ function App() {
       const authorizedProfile = await loginWithGoogle();
       if (authorizedProfile) setShowAdminLogin(false);
       else setLoginError('Saknar behörighet.');
-    } catch {
-      setLoginError('Inloggning misslyckades.');
+    } catch (err: unknown) {
+      const firebaseError = err as { code?: string; message?: string };
+      console.error('[Auth] Login failed:', firebaseError.code, firebaseError.message);
+      setLoginError(`Inloggning misslyckades: ${firebaseError.code ?? 'Okänt fel'}`);
     } finally {
       setLoginLoading(false);
     }
