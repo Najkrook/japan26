@@ -348,7 +348,7 @@ const DaySection: React.FC<DaySectionProps> = ({
           background: var(--glass-bg);
           border: 1px solid var(--glass-border);
           border-radius: var(--radius-md);
-          padding: 0.75rem;
+          overflow: hidden;
           backdrop-filter: blur(20px);
         }
 
@@ -365,15 +365,66 @@ const DaySection: React.FC<DaySectionProps> = ({
           outline: none;
         }
 
+        .editor-actions {
+          display: flex;
+          justify-content: flex-end;
+          gap: 0.75rem;
+          padding: 1rem;
+          background: rgba(var(--primary-rgb), 0.03);
+          border-top: 1px solid var(--border-color);
+        }
+
+        .editor-btn {
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+          padding: 0.6rem 1.2rem;
+          border-radius: var(--radius-sm);
+          font-family: var(--font-mono);
+          font-size: 0.8rem;
+          font-weight: 700;
+          text-transform: uppercase;
+          letter-spacing: 0.1em;
+          border: none;
+          cursor: pointer;
+          transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .editor-btn.cancel {
+          background: transparent;
+          color: var(--text-dim);
+          border: 1px solid var(--border-color);
+        }
+
+        .editor-btn.cancel:hover {
+          background: var(--glass-bg);
+          color: var(--text-main);
+          border-color: var(--text-muted);
+        }
+
         .editor-btn.save {
           background: var(--primary);
           color: white;
           box-shadow: 0 4px 15px rgba(var(--primary-rgb), 0.3);
         }
 
+        .editor-btn.save:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 8px 25px rgba(var(--primary-rgb), 0.4);
+          filter: brightness(1.1);
+        }
+
         [data-theme='dark'] .editor-btn.save {
           background: linear-gradient(135deg, var(--primary) 0%, #ff4a8d 100%);
           box-shadow: 0 0 20px rgba(255, 0, 127, 0.4);
+        }
+
+        [data-theme='dark'] .editor-btn.save:hover {
+          box-shadow: 0 0 30px rgba(255, 0, 127, 0.6);
+        }
+
+        .editor-btn:active {
+          transform: scale(0.95);
         }
 
         .empty-state-card {
