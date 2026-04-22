@@ -33,6 +33,7 @@ export interface Comment {
   dayId: string;
   author: string;
   text: string;
+  emoji?: string;
   createdAt: Date | null;
 }
 

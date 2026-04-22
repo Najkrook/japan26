@@ -39,7 +39,7 @@ export const useComments = (mediaId: string | null) => {
     return () => unsubscribe();
   }, [mediaId]);
 
-  const addComment = async (author: string, text: string, dayId: string) => {
+  const addComment = async (author: string, text: string, dayId: string, emoji?: string) => {
     if (!text.trim()) {
       return;
     }
@@ -49,6 +49,7 @@ export const useComments = (mediaId: string | null) => {
       dayId,
       author: author.trim(),
       text: text.trim(),
+      ...(emoji && { emoji }),
       createdAt: serverTimestamp(),
     });
   };

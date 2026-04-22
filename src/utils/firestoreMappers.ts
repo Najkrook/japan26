@@ -63,6 +63,7 @@ export const mapComment = (snapshot: QueryDocumentSnapshot<DocumentData>): Comme
     dayId: typeof data.dayId === 'string' ? data.dayId : '',
     author: typeof data.author === 'string' && data.author.trim() ? data.author : 'Besökare',
     text: typeof data.text === 'string' ? data.text : '',
+    emoji: typeof data.emoji === 'string' ? data.emoji : undefined,
     createdAt: timestampToDate(data.createdAt),
   };
 };

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { MessageCircle, Play, X } from 'lucide-react';
 import type { Media } from '../types';
@@ -14,6 +14,8 @@ interface MediaItemProps {
 }
 
 const MediaItem: React.FC<MediaItemProps> = ({ item, isAdmin, commentCount, onClick, onDelete }) => {
+  const [isLoaded, setIsLoaded] = useState(false);
+
   const handleDelete = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (onDelete && window.confirm('Vill du ta bort denna bild permanent?')) {
@@ -39,14 +41,25 @@ const MediaItem: React.FC<MediaItemProps> = ({ item, isAdmin, commentCount, onCl
       onMouseEnter={handlePreload}
       onTouchStart={handlePreload}
     >
-      <div className="media-preview-wrapper">
+      <div className={`media-preview-wrapper ${!isLoaded ? 'is-loading' : 'is-loaded'}`}>
+        {!isLoaded && <div className="ink-wash-loader"></div>}
+        
         {item.type === 'video' && !item.thumbnailUrl ? (
-          <div className="media-image video-placeholder"></div>
+          <video
+            src={`${item.url}#t=0.001`}
+            preload="metadata"
+            playsInline
+            muted
+            onLoadedData={() => setIsLoaded(true)}
+            className="media-image"
+            style={{ objectFit: 'cover', pointerEvents: 'none' }}
+          />
         ) : (
           <img
             src={item.thumbnailUrl || item.url}
             alt={item.fileName}
             loading="lazy"
+            onLoad={() => setIsLoaded(true)}
             className="media-image"
           />
         )}
@@ -99,18 +112,35 @@ const MediaItem: React.FC<MediaItemProps> = ({ item, isAdmin, commentCount, onCl
           width: 100%;
           height: 100%;
           object-fit: cover;
-          transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+          transition: transform 0.4s ease, opacity 0.8s cubic-bezier(0.22, 1, 0.36, 1), filter 0.8s cubic-bezier(0.22, 1, 0.36, 1);
+          opacity: 0;
+          filter: blur(10px);
+          position: relative;
+          z-index: 2;
+        }
+
+        .is-loaded .media-image {
+          opacity: 1;
+          filter: blur(0);
+        }
+
+        .ink-wash-loader {
+          position: absolute;
+          inset: 0;
+          background: linear-gradient(-45deg, #fdfbf7, #ffe1e8, #fdfbf7, #fff0f3);
+          background-size: 400% 400%;
+          animation: sumie-wash 4s ease infinite;
+          z-index: 1;
+        }
+
+        @keyframes sumie-wash {
+          0% { background-position: 0% 50%; opacity: 0.7; }
+          50% { background-position: 100% 50%; opacity: 1; }
+          100% { background-position: 0% 50%; opacity: 0.7; }
         }
 
         .media-item-container:hover .media-image {
           transform: scale(1.05);
-        }
-
-        .video-placeholder {
-          background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
-          display: flex;
-          align-items: center;
-          justify-content: center;
         }
 
         .video-preview {

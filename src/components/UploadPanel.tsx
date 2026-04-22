@@ -51,6 +51,14 @@ const makeQueueId = (): string => {
   return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 };
 
+const formatFileSize = (bytes: number): string => {
+  if (bytes === 0) return '0 B';
+  const k = 1024;
+  const sizes = ['B', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+};
+
 const UploadPanel: React.FC<UploadPanelProps> = ({ ensureDay, onUploadComplete }) => {
   const [isUploading, setIsUploading] = useState(false);
   const [queue, setQueue] = useState<UploadQueueItem[]>([]);
@@ -63,7 +71,7 @@ const UploadPanel: React.FC<UploadPanelProps> = ({ ensureDay, onUploadComplete }
 
   const prepareFile = async (file: File): Promise<UploadQueueItem> => {
     const kind = detectMediaKind(file);
-    const isLargeVideo = kind === 'video' && file.size > 80 * 1024 * 1024; // 80 MB Limit
+    const isVideo = kind === 'video';
     
     const capturedAtInfo = await extractCapturedAt(file, kind);
     const processedFile = await convertHeicToJpeg(file);
@@ -72,15 +80,14 @@ const UploadPanel: React.FC<UploadPanelProps> = ({ ensureDay, onUploadComplete }
     let dimensions = { width: 0, height: 0 };
     let thumbnailBlob = new Blob();
 
-    // Fast-track large videos to avoid crashing iOS Safari with out-of-memory errors
-    if (!isLargeVideo) {
+    // Fast-track ALL videos directly to the cloud. We rely on native HTML browser 
+    // thumbnails via `#t=0.001` so we don't crash iOS Safari with intensive Canvas rendering.
+    if (!isVideo) {
       try {
         dimensions = await readMediaDimensions(compressedFile, kind);
         thumbnailBlob = await createThumbnail(compressedFile, kind);
       } catch (err) {
-        console.warn('Miniatyrskapande misslyckades/tog för lång tid, aktiverar snabbspår:', err);
-        // Genom att ignorera felet faller vi tillbaka på "snabbspår"-logiken
-        // med width=0 och tom thumbnailBlob, vilket gör att uppladdningen kan fortsätta.
+        console.warn('Miniatyrskapande misslyckades, aktiverar snabbspår:', err);
       }
     }
     
@@ -291,6 +298,7 @@ const UploadPanel: React.FC<UploadPanelProps> = ({ ensureDay, onUploadComplete }
                 </div>
                 <div className="queue-subline">
                   <span>{item.kind === 'video' ? 'Video' : 'Foto'}</span>
+                  <span>{formatFileSize(item.file.size)}</span>
                   <span>{item.width > 0 ? `${item.width}x${item.height}` : 'Bearbetar...'}</span>
                   <span className="source-tag">{item.capturedAtSource === 'exif' ? 'EXIF' : 'Fil-datum'}</span>
                 </div>

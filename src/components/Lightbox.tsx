@@ -1,6 +1,6 @@
 import React from 'react';
 import { AnimatePresence, motion, type PanInfo } from 'framer-motion';
-import { ChevronLeft, ChevronRight, Loader2, MessageCircle, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, MessageCircle, X } from 'lucide-react';
 import { useComments } from '../hooks/useComments';
 import type { Media } from '../types';
 import { isImageUrlReady, preloadImageUrl, warmPhotoMedia } from '../utils/imagePreload';
@@ -170,7 +170,7 @@ const PhotoSlot: React.FC<{
     >
       {shouldShowPhotoLoader && (
         <div className="lightbox-photo-loading" data-testid="lightbox-photo-loading">
-          <Loader2 className="spinner" size={28} />
+          <div className="sakura-ripple"></div>
         </div>
       )}
 
@@ -230,6 +230,13 @@ const Lightbox: React.FC<LightboxProps> = ({
   const gestureAxisRef = React.useRef<LightboxGestureAxis>(null);
   const lightboxContentRef = React.useRef<HTMLDivElement | null>(null);
   const mediaCardRef = React.useRef<HTMLDivElement | null>(null);
+  const videoRef = React.useRef<HTMLVideoElement>(null);
+
+  React.useEffect(() => {
+    if (!isOpen && videoRef.current) {
+      videoRef.current.pause();
+    }
+  }, [isOpen]);
   const canUseMobileGestures = isMobileLayout && !isCommentsOpen;
   const topRailClassName = `lightbox-mobile-rail ${controlsDimmed ? 'dimmed' : ''}`;
   const photoWindowItems = React.useMemo(
@@ -541,6 +548,7 @@ const Lightbox: React.FC<LightboxProps> = ({
     <>
       {item.type === 'video' ? (
         <video
+          ref={videoRef}
           src={item.url}
           controls
           autoPlay

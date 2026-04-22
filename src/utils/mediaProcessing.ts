@@ -194,17 +194,19 @@ const loadVideo = (file: File): Promise<HTMLVideoElement> =>
     video.playsInline = true;
     video.muted = true;
     video.crossOrigin = 'anonymous';
+    video.setAttribute('playsinline', ''); // Essential for iOS Safari
 
-    video.onloadedmetadata = () => {
-      // Seek to 0.5s to get a good thumbnail instead of a black start frame
-      video.currentTime = 0.5;
+    video.onloadeddata = () => {
+      // Seek to 0.1s to get a good thumbnail instead of a black start frame,
+      // safer than 0.5s for very short clips.
+      video.currentTime = 0.1;
     };
 
     video.onseeked = () => {
       // Don't cleanup the URL yet, we need it to draw to canvas!
       // We only cleanup metadata/events
       clearTimeout(timeout);
-      video.onloadedmetadata = null;
+      video.onloadeddata = null;
       video.onseeked = null;
       video.onerror = null;
       resolve(video);
@@ -216,6 +218,7 @@ const loadVideo = (file: File): Promise<HTMLVideoElement> =>
     };
 
     video.src = objectUrl;
+    video.load(); // Force Safari iOS to start loading
   });
 
 const canvasToBlob = (canvas: HTMLCanvasElement): Promise<Blob> =>
