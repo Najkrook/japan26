@@ -5,6 +5,7 @@ import { Image as ImageIcon, Loader2, Edit3, Check, X } from 'lucide-react';
 import { useMedia } from '../hooks/useMedia';
 import { useDayCommentCounts } from '../hooks/useDayCommentCounts';
 import MediaGrid from './MediaGrid';
+import EmaBoard from './EmaBoard';
 import { formatDateSwedish } from '../utils/dateHelpers';
 import { preloadImageUrl } from '../utils/imagePreload';
 import type { Day, Media, UpdateDayInput } from '../types';
@@ -211,6 +212,8 @@ const DaySection: React.FC<DaySectionProps> = ({
             </div>
           )}
         </div>
+
+        <EmaBoard dayId={day.id} />
       </article>
 
       <style>{`

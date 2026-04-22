@@ -1,6 +1,6 @@
 import React from 'react';
-import { MapContainer, Marker, Popup, TileLayer, useMap } from 'react-leaflet';
-import { Image as ImageIcon, Loader2, MapPin, TriangleAlert } from 'lucide-react';
+import { MapContainer, Marker, Popup, TileLayer, Polyline, useMap } from 'react-leaflet';
+import { Image as ImageIcon, Loader2, MapPin, TriangleAlert, Calendar } from 'lucide-react';
 import L from 'leaflet';
 import iconUrl from 'leaflet/dist/images/marker-icon.png';
 import iconShadow from 'leaflet/dist/images/marker-shadow.png';
@@ -8,7 +8,8 @@ import { useAllMedia } from '../hooks/useAllMedia';
 import type { Media } from '../types';
 import { formatDateSwedish } from '../utils/dateHelpers';
 import { preloadImageUrl } from '../utils/imagePreload';
-import { DEFAULT_MAP_CENTER, getMapBounds, getMapMedia, type MapBounds } from '../utils/mapMedia';
+import { DEFAULT_MAP_CENTER, getMapBounds, getJourneyPath, type DayStop, type MapBounds } from '../utils/mapMedia';
+import { createHankoIcon } from './HankoMarker';
 
 const DefaultIcon = L.icon({
   iconUrl,
@@ -57,8 +58,9 @@ const MapResizer: React.FC<{ isActive: boolean }> = ({ isActive }) => {
 
 const MapTab: React.FC<MapTabProps> = ({ isActive = true, onMediaOpen }) => {
   const { media, loading, error } = useAllMedia();
-  const mapMedia = React.useMemo(() => getMapMedia(media), [media]);
-  const bounds = React.useMemo(() => getMapBounds(mapMedia), [mapMedia]);
+  const journeyStops = React.useMemo(() => getJourneyPath(media), [media]);
+  const bounds = React.useMemo(() => getMapBounds(journeyStops), [journeyStops]);
+  const journeyCoordinates = React.useMemo(() => journeyStops.map(s => s.coordinate), [journeyStops]);
   const hasAnyMedia = media.length > 0;
 
   return (
@@ -105,41 +107,72 @@ const MapTab: React.FC<MapTabProps> = ({ isActive = true, onMediaOpen }) => {
               url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
             />
 
-            {mapMedia.map((item, index) => (
-              <Marker 
-                key={item.id} 
-                position={[item.latitude!, item.longitude!]}
-                eventHandlers={{
-                  mouseover: () => {
-                    preloadImageUrl(item.thumbnailUrl || item.url).catch(() => undefined);
-                  }
+            {journeyCoordinates.length > 1 && (
+              <Polyline
+                positions={journeyCoordinates}
+                pathOptions={{ 
+                  color: '#BC002D', // Japanese Red
+                  weight: 3,
+                  opacity: 0.7,
+                  dashArray: '8, 8',
+                  lineJoin: 'round'
                 }}
-              >
-                <Popup className="media-popup">
-                  <div className="popup-content">
-                    <img
-                      src={item.thumbnailUrl}
-                      alt={item.fileName}
-                      className="popup-thumbnail"
-                      loading="lazy"
-                    />
-                    <div className="popup-meta">
-                      <p className="popup-date">{formatDateSwedish(item.capturedAt)}</p>
-                      <p className="popup-name">{item.fileName}</p>
+                className="red-thread"
+              />
+            )}
+
+            {journeyStops.map((stop, index) => {
+              const representativeMedia = stop.media[0];
+              return (
+                <Marker 
+                  key={stop.dayId} 
+                  position={stop.coordinate}
+                  icon={createHankoIcon(index)}
+                  eventHandlers={{
+                    mouseover: () => {
+                      if (representativeMedia) {
+                        preloadImageUrl(representativeMedia.thumbnailUrl || representativeMedia.url).catch(() => undefined);
+                      }
+                    }
+                  }}
+                >
+                  <Popup className="polaroid-popup">
+                    <div className="polaroid-frame">
+                      <div className="polaroid-image-container">
+                        {representativeMedia ? (
+                          <img
+                            src={representativeMedia.thumbnailUrl || representativeMedia.url}
+                            alt={stop.dayId}
+                            className="polaroid-image"
+                            loading="lazy"
+                          />
+                        ) : (
+                          <div className="polaroid-placeholder">
+                            <ImageIcon size={32} />
+                          </div>
+                        )}
+                      </div>
+                      <div className="polaroid-caption">
+                        <div className="polaroid-date">
+                          <Calendar size={12} />
+                          <span>{formatDateSwedish(representativeMedia?.capturedAt || new Date())}</span>
+                        </div>
+                        <p className="polaroid-count">
+                          {stop.media.length} {stop.media.length === 1 ? 'minne' : 'minnen'}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        className="polaroid-action-btn"
+                        onClick={() => onMediaOpen?.(stop.media, 0)}
+                      >
+                        Upptäck dagen
+                      </button>
                     </div>
-                    <button
-                      type="button"
-                      className="popup-open-btn"
-                      data-testid={`map-open-media-${item.id}`}
-                      onClick={() => onMediaOpen?.(mapMedia, index)}
-                    >
-                      <ImageIcon size={16} />
-                      <span>{'\u00d6ppna'}</span>
-                    </button>
-                  </div>
-                </Popup>
-              </Marker>
-            ))}
+                  </Popup>
+                </Marker>
+              );
+            })}
           </MapContainer>
         )}
       </div>
@@ -203,69 +236,161 @@ const MapTab: React.FC<MapTabProps> = ({ isActive = true, onMediaOpen }) => {
           height: 100%;
           width: 100%;
           z-index: 10;
+          background: #f8f6f1; /* Washi paper-like map background tint */
         }
 
-        .media-popup .leaflet-popup-content-wrapper {
-          border-radius: var(--radius-md);
-          overflow: hidden;
+        /* The Red Thread Animation */
+        .red-thread {
+          stroke-dasharray: 10, 10;
+          stroke-dashoffset: 1000;
+          animation: draw-thread 5s linear forwards;
+        }
+
+        @keyframes draw-thread {
+          to {
+            stroke-dashoffset: 0;
+          }
+        }
+
+        /* Hanko Stamp Marker */
+        .hanko-marker-container {
+          background: transparent !important;
+          border: none !important;
+        }
+
+        .hanko-stamp {
+          width: 42px;
+          height: 42px;
+          background: #BC002D; /* Japanese Sun Red */
+          border: 2px solid #BC002D;
+          border-radius: 5px; /* Square with slight roundness like a real hanko */
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          box-shadow: 0 2px 6px rgba(188, 0, 45, 0.4), inset 0 0 10px rgba(0,0,0,0.1);
+          transform: rotate(-3deg);
+          transition: all 0.3s ease;
+        }
+
+        .hanko-stamp:hover {
+          transform: rotate(2deg) scale(1.1);
+          box-shadow: 0 4px 12px rgba(188, 0, 45, 0.5);
+        }
+
+        .hanko-inner {
+          width: 32px;
+          height: 32px;
+          border: 1px solid rgba(255, 255, 255, 0.4);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+
+        .hanko-label {
+          color: white;
+          font-family: 'Zen Kurenaido', 'Brush Script MT', cursive;
+          font-weight: 700;
+          font-size: 1.1rem;
+          text-shadow: 1px 1px 2px rgba(0,0,0,0.2);
+        }
+
+        /* Polaroid Popup */
+        .polaroid-popup .leaflet-popup-content-wrapper {
+          background: transparent;
+          box-shadow: none;
           padding: 0;
         }
 
-        .media-popup .leaflet-popup-content {
-          margin: 0;
-          width: 220px !important;
+        .polaroid-popup .leaflet-popup-tip-container {
+          display: none; /* Clean look */
         }
 
-        .popup-content {
-          display: flex;
-          flex-direction: column;
-          gap: 0.75rem;
-          padding-bottom: 0.75rem;
+        .polaroid-frame {
+          background: white;
+          padding: 10px 10px 45px 10px;
+          width: 220px;
+          box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+          transform: rotate(-1deg);
+          position: relative;
         }
 
-        .popup-thumbnail {
+        .polaroid-frame::after {
+          content: "";
+          position: absolute;
+          bottom: 12px;
+          left: 50%;
+          transform: translateX(-50%);
+          width: 80%;
+          height: 20px;
+          font-family: 'Kalam', cursive;
+          color: #333;
+          font-size: 0.9rem;
+          text-align: center;
+        }
+
+        .polaroid-image-container {
           width: 100%;
-          height: 128px;
+          height: 160px;
+          background: #eee;
+          overflow: hidden;
+          position: relative;
+        }
+
+        .polaroid-image {
+          width: 100%;
+          height: 100%;
           object-fit: cover;
           display: block;
         }
 
-        .popup-meta {
+        .polaroid-placeholder {
+          height: 100%;
           display: flex;
-          flex-direction: column;
-          gap: 0.25rem;
-          padding: 0 0.75rem;
-        }
-
-        .popup-date {
-          margin: 0;
-          font-family: var(--font-main);
-          font-weight: 600;
-          font-size: 0.8rem;
-          color: var(--text-main);
-        }
-
-        .popup-name {
-          margin: 0;
-          color: var(--text-dim);
-          font-size: 0.82rem;
-          line-height: 1.35;
-          word-break: break-word;
-        }
-
-        .popup-open-btn {
-          margin: 0 0.75rem;
-          min-height: 42px;
-          border-radius: var(--radius-full);
-          background: var(--primary);
-          color: white;
-          display: inline-flex;
           align-items: center;
           justify-content: center;
-          gap: 0.45rem;
+          color: #999;
+        }
+
+        .polaroid-caption {
+          margin-top: 10px;
+          display: flex;
+          flex-direction: column;
+          gap: 2px;
+        }
+
+        .polaroid-date {
+          display: flex;
+          align-items: center;
+          gap: 4px;
+          font-size: 0.75rem;
+          color: #666;
+          font-weight: 600;
+        }
+
+        .polaroid-count {
+          margin: 0;
+          font-size: 0.75rem;
+          color: var(--primary);
           font-weight: 700;
-          font-size: 0.9rem;
-          padding: 0.65rem 0.9rem;
+          letter-spacing: 0.05em;
+          text-transform: uppercase;
+        }
+
+        .polaroid-action-btn {
+          margin-top: 15px;
+          width: 100%;
+          padding: 8px;
+          background: #000;
+          color: white;
+          border-radius: 4px;
+          font-weight: 700;
+          font-size: 0.85rem;
+          cursor: pointer;
+          transition: background 0.2s;
+        }
+
+        .polaroid-action-btn:hover {
+          background: var(--primary);
         }
 
         @media (max-width: 768px) {
@@ -277,8 +402,8 @@ const MapTab: React.FC<MapTabProps> = ({ isActive = true, onMediaOpen }) => {
             min-height: 360px;
           }
 
-          .media-popup .leaflet-popup-content {
-            width: 240px !important;
+          .polaroid-frame {
+            width: 200px;
           }
         }
       `}</style>

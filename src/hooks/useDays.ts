@@ -125,7 +125,19 @@ export const useDays = () => {
       const deleteMediaPromises = mediaItems.map(item => deleteMedia(item));
       await Promise.all(deleteMediaPromises);
 
-      // 3. Delete the day document itself
+      // 3. Delete all Ema Board entries for this day
+      // These are comments with mediaId: "ema-board-{dayId}"
+      try {
+        const emaBoardId = `ema-board-${dayId}`;
+        const emaQuery = query(collection(db, 'comments'), where('mediaId', '==', emaBoardId));
+        const emaSnapshot = await getDocs(emaQuery);
+        const emaDeletePromises = emaSnapshot.docs.map((doc) => deleteDoc(doc.ref));
+        await Promise.all(emaDeletePromises);
+      } catch (err) {
+        console.warn(`Could not delete Ema Board entries for day ${dayId}:`, err);
+      }
+
+      // 4. Delete the day document itself
       await deleteDoc(doc(db, 'days', dayId));
     } catch (error) {
       console.error('Error cascading deletion for day:', error);
