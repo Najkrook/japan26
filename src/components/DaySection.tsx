@@ -258,7 +258,6 @@ const DaySection: React.FC<DaySectionProps> = ({
           background: var(--surface-color);
           border-radius: var(--radius-lg);
           padding: 3rem;
-          margin-left: 6rem; /* Space for the timeline track */
           transition: all 0.4s ease;
           border: 1px solid var(--border-color);
         }

@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo, useEffect } from 'react';
-import { AnimatePresence, motion, useScroll, useSpring } from 'framer-motion';
+import { AnimatePresence, motion, useScroll, useSpring, useTransform } from 'framer-motion';
 import { Image as ImageIcon, Loader2, X, Trash2, AlertTriangle } from 'lucide-react';
 import AdminLogin from './components/AdminLogin';
 import DaySection from './components/DaySection';
@@ -69,8 +69,20 @@ function App() {
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
   }, []);
 
+  // Lock scrolling when admin panel is open
+  useEffect(() => {
+    if (isAdminPanelOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [isAdminPanelOpen]);
+
   // Animated scroll progress for the timeline
-  const { scrollYProgress } = useScroll();
+  const { scrollYProgress, scrollY } = useScroll();
 
   // Apply a gentle spring physics for buttery smooth mobile scrolling
   const scaleY = useSpring(scrollYProgress, {
@@ -78,6 +90,13 @@ function App() {
     damping: 30,
     restDelta: 0.001
   });
+
+  // Cinematic Hero Motion Values (Pixel-based for consistency)
+  const heroOpacity = useTransform(scrollY, [0, 1000], [1, 0]);
+  const heroScale = useTransform(scrollY, [0, 1200], [1, 1.15]);
+  const heroY = useTransform(scrollY, [0, 1200], [0, -50]);
+  const yearY = useTransform(scrollY, [0, 1200], [0, -120]); // Deeper parallax shift
+  const kanjiOpacity = useTransform(scrollY, [100, 500, 900], [0, 0.05, 0]); // Ultra-gradual reveal
 
   const selectedDay = useMemo(() =>
     days.find((day) => day.id === activeDayId) ?? days[0] ?? null
@@ -164,14 +183,29 @@ function App() {
           aria-label={welcomeLabel}
           data-loading-copy={loadingMediaLabel}
         >
-          <div className="ethereal-cover fade-in">
+          <motion.div
+            className="ethereal-cover"
+            style={{ opacity: heroOpacity, scale: heroScale, y: heroY }}
+          >
+            <motion.div
+              className="hero-kanji-bg"
+              style={{ opacity: kanjiOpacity }}
+            >
+              旅行日記
+            </motion.div>
             <h1 className="hero-title-main">Japan</h1>
-            <div className="hero-year-main">2026</div>
+            <motion.div
+              className="hero-year-main"
+              style={{ y: yearY }}
+            >
+              2026
+            </motion.div>
             <p className="hero-tagline">Följ äventyret i Japan 🌸🗾🍙</p>
             <p className="hero-description-small">
-              わかったよ、君は自分で読めないものを翻訳するのが好きなんだね。君が頭がいいってわかるように、ニヤリとした絵文字を送ってくれ。
+              「日本語がめちゃくちゃ上手なのか、それとも翻訳ツールの使い方を知ってるのか、どっちにしても盛大な拍手ものです！<br />
+              頭いいってわかるように、ドヤ顔の絵文字を送ってね ;)」
             </p>
-          </div>
+          </motion.div>
 
           <div className="content-container">
             <AnimatePresence>
@@ -409,6 +443,23 @@ function App() {
           margin: 0;
           font-weight: 700;
           line-height: 1;
+          position: relative;
+          z-index: 2;
+        }
+
+        .hero-kanji-bg {
+          position: absolute;
+          top: 50%;
+          left: 50%;
+          transform: translate(-50%, -50%);
+          font-family: var(--font-heading);
+          font-size: clamp(8rem, 25vw, 16rem);
+          color: var(--primary);
+          white-space: nowrap;
+          pointer-events: none;
+          z-index: 1;
+          font-weight: 700;
+          letter-spacing: 0.1em;
         }
 
         .hero-year-main {
@@ -416,9 +467,11 @@ function App() {
           font-size: clamp(2rem, 5vw, 3.5rem);
           color: var(--primary);
           letter-spacing: 0.6em;
-          margin: 0.5rem 0 2rem;
+          margin: 5rem 0 3rem; /* Significantly increased top margin to prevent overlap */
           padding-left: 0.6em;
           font-weight: 700;
+          position: relative;
+          z-index: 3;
         }
 
         .hero-tagline {
@@ -528,30 +581,19 @@ function App() {
           min-height: 400px;
         }
 
-        .timeline-track {
+        .timeline-fill {
           position: absolute;
-          left: calc(3rem - 1px);
+          left: 1.5rem; /* Match index.css */
           top: 0;
           bottom: 0;
           width: 1px;
-          background: var(--border-color);
-          z-index: 0;
-          opacity: 0.5;
-        }
-
-        .timeline-fill {
-          position: absolute;
-          left: calc(3rem - 1px);
-          top: 0;
-          bottom: 0;
-          width: 3px;
           background: var(--primary);
           z-index: 1;
         }
 
         [data-theme='dark'] .timeline-fill {
-          width: 2px;
-          left: calc(3rem - 1px);
+          width: 1px;
+          left: 1.5rem;
           background: linear-gradient(to bottom, var(--primary), var(--secondary));
           box-shadow: 0 0 15px var(--primary);
         }

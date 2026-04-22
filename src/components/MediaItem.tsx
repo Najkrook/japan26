@@ -40,12 +40,16 @@ const MediaItem: React.FC<MediaItemProps> = ({ item, isAdmin, commentCount, onCl
       onTouchStart={handlePreload}
     >
       <div className="media-preview-wrapper">
-        <img
-          src={item.thumbnailUrl || item.url}
-          alt={item.fileName}
-          loading="lazy"
-          className="media-image"
-        />
+        {item.type === 'video' && !item.thumbnailUrl ? (
+          <div className="media-image video-placeholder"></div>
+        ) : (
+          <img
+            src={item.thumbnailUrl || item.url}
+            alt={item.fileName}
+            loading="lazy"
+            className="media-image"
+          />
+        )}
 
         {item.type === 'video' && (
           <div className="video-preview">
@@ -100,6 +104,13 @@ const MediaItem: React.FC<MediaItemProps> = ({ item, isAdmin, commentCount, onCl
 
         .media-item-container:hover .media-image {
           transform: scale(1.05);
+        }
+
+        .video-placeholder {
+          background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
+          display: flex;
+          align-items: center;
+          justify-content: center;
         }
 
         .video-preview {

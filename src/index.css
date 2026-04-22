@@ -109,26 +109,21 @@ button {
 
 .timeline-track {
   position: absolute;
-  left: 3rem;
+  left: 1.5rem; /* Moved closer to the edge */
   top: 0;
   bottom: 0;
-  width: 1px; /* Even thinner and more delicate */
-  background: linear-gradient(to bottom, 
-    transparent 0%, 
-    var(--secondary) 15%, 
-    var(--secondary) 85%, 
-    transparent 100%
-  );
-  opacity: 0.5;
+  width: 1px;
+  background: var(--border-color);
+  opacity: 0.3;
   z-index: 0;
 }
 
 .timeline-fill {
   position: absolute;
-  left: 3rem;
+  left: 1.5rem;
   top: 0;
   bottom: 0;
-  width: 2px;
+  width: 1px; /* Thinner laser */
   background: linear-gradient(to bottom, var(--primary) 0%, #ff4d6d 100%);
   z-index: 1;
 }
@@ -140,7 +135,7 @@ button {
   border-radius: var(--radius-lg);
   padding: 3rem;
   box-shadow: var(--shadow-md);
-  margin-left: 5rem;
+  margin-left: 3.5rem; /* Significantly reduced to give more space for content */
   position: relative;
   transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1);
   border: 1px solid var(--glass-border);
@@ -159,16 +154,16 @@ button {
 
 .timeline-dot {
   position: absolute;
-  left: calc(3rem - 6px);
+  left: calc(1.5rem - 6px); /* Align with new 1.5rem track center */
   top: 3.5rem;
   width: 12px;
   height: 12px;
   background: var(--primary);
   border-radius: 50%;
   box-shadow: 
-    0 0 0 6px var(--neutral), 
-    0 0 0 16px var(--tertiary),
-    0 0 25px rgba(188, 0, 45, 0.2);
+    0 0 0 4px var(--neutral), 
+    0 0 0 10px rgba(var(--primary-rgb), 0.1),
+    0 0 20px rgba(var(--primary-rgb), 0.4);
   z-index: 10;
   transition: transform 0.3s ease;
 }
@@ -235,16 +230,16 @@ button {
   
   .timeline-track,
   .timeline-fill {
-    left: 2.25rem;
+    left: 1rem;
   }
   
   .journal-card {
-    margin-left: 3.5rem;
+    margin-left: 2rem;
     padding: 1.5rem;
   }
   
   .timeline-dot {
-    left: calc(2.25rem - 6px); /* Align with the 2.25rem track */
+    left: calc(1rem - 6px);
     top: 2.5rem;
   }
 }

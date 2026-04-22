@@ -63,11 +63,26 @@ const UploadPanel: React.FC<UploadPanelProps> = ({ ensureDay, onUploadComplete }
 
   const prepareFile = async (file: File): Promise<UploadQueueItem> => {
     const kind = detectMediaKind(file);
+    const isLargeVideo = kind === 'video' && file.size > 80 * 1024 * 1024; // 80 MB Limit
+    
     const capturedAtInfo = await extractCapturedAt(file, kind);
     const processedFile = await convertHeicToJpeg(file);
     const compressedFile = await compressImage(processedFile, kind);
-    const dimensions = await readMediaDimensions(compressedFile, kind);
-    const thumbnailBlob = await createThumbnail(compressedFile, kind);
+    
+    let dimensions = { width: 0, height: 0 };
+    let thumbnailBlob = new Blob();
+
+    // Fast-track large videos to avoid crashing iOS Safari with out-of-memory errors
+    if (!isLargeVideo) {
+      try {
+        dimensions = await readMediaDimensions(compressedFile, kind);
+        thumbnailBlob = await createThumbnail(compressedFile, kind);
+      } catch (err) {
+        console.warn('Miniatyrskapande misslyckades/tog för lång tid, aktiverar snabbspår:', err);
+        // Genom att ignorera felet faller vi tillbaka på "snabbspår"-logiken
+        // med width=0 och tom thumbnailBlob, vilket gör att uppladdningen kan fortsätta.
+      }
+    }
     
     return {
       id: makeQueueId(),
@@ -131,7 +146,7 @@ const UploadPanel: React.FC<UploadPanelProps> = ({ ensureDay, onUploadComplete }
     }
   };
 
-  const uploadableItems = queue.filter((item) => item.status !== 'success' && item.thumbnailBlob.size > 0);
+  const uploadableItems = queue.filter((item) => item.status !== 'success'); // Allow items without thumbnails (fast-tracked videos)
   const pendingItems = uploadableItems.filter((item) => item.status === 'queued' || item.status === 'error').length;
 
   const handleStartUpload = async () => {
@@ -178,14 +193,15 @@ const UploadPanel: React.FC<UploadPanelProps> = ({ ensureDay, onUploadComplete }
             );
           });
 
-          await uploadBytes(ref(storage, thumbPath), item.thumbnailBlob, {
-            contentType: 'image/jpeg',
-          });
+          let thumbnailUrl = '';
+          if (item.thumbnailBlob && item.thumbnailBlob.size > 0) {
+            await uploadBytes(ref(storage, thumbPath), item.thumbnailBlob, {
+              contentType: 'image/jpeg',
+            });
+            thumbnailUrl = await getDownloadURL(ref(storage, thumbPath));
+          }
 
-          const [url, thumbnailUrl] = await Promise.all([
-            getDownloadURL(ref(storage, mediaPath)),
-            getDownloadURL(ref(storage, thumbPath)),
-          ]);
+          const url = await getDownloadURL(ref(storage, mediaPath));
 
           const mediaPayload: Record<string, unknown> = {
             dayId: targetDayId,
@@ -275,20 +291,23 @@ const UploadPanel: React.FC<UploadPanelProps> = ({ ensureDay, onUploadComplete }
                 </div>
                 <div className="queue-subline">
                   <span>{item.kind === 'video' ? 'Video' : 'Foto'}</span>
-                  <span>{item.width}x{item.height}</span>
+                  <span>{item.width > 0 ? `${item.width}x${item.height}` : 'Bearbetar...'}</span>
                   <span className="source-tag">{item.capturedAtSource === 'exif' ? 'EXIF' : 'Fil-datum'}</span>
                 </div>
               </div>
 
               <div className="queue-controls">
-                <div className="auto-date-label">
-                  <CalendarDays size={14} />
-                  <span>{formatDateSwedish(item.capturedAt)}</span>
-                </div>
-                <div className="item-progress-bar">
-                  <div className="progress-fill" style={{ width: `${item.progress}%` }} />
-                </div>
-                {item.error && <p className="item-error">{item.error}</p>}
+                {item.error ? (
+                  <div className="item-error-msg">
+                    <AlertCircle size={14} />
+                    <span>{item.error}</span>
+                  </div>
+                ) : (
+                  <div className="auto-date-label">
+                    <CalendarDays size={14} />
+                    <span>{formatDateSwedish(item.capturedAt)}</span>
+                  </div>
+                )}
               </div>
             </div>
           ))}
@@ -485,7 +504,20 @@ const UploadPanel: React.FC<UploadPanelProps> = ({ ensureDay, onUploadComplete }
           }
         }
 
+        .item-error-msg {
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+          color: #ff4d4d;
+          font-size: 0.85rem;
+          font-weight: 500;
+          background: rgba(255, 77, 77, 0.05);
+          padding: 0.4rem 0.75rem;
+          border-radius: var(--radius-sm);
+        }
+
         .item-progress-bar {
+          margin-top: 0.5rem;
           width: 100%;
           height: 6px;
           background: rgba(255, 255, 255, 0.1);
@@ -493,24 +525,8 @@ const UploadPanel: React.FC<UploadPanelProps> = ({ ensureDay, onUploadComplete }
           overflow: hidden;
         }
 
-        .day-select-label select {
-          flex: 1;
-          background: var(--bg-color);
-          border: 1px solid var(--border-color);
-          color: var(--text-main);
-          border-radius: var(--radius-sm);
-          padding: 0.5rem 0.75rem;
-        }
-
-        .progress-fill {
-          height: 100%;
-          background: var(--primary);
-          transition: width 0.3s ease;
-        }
-
         .item-error {
-          font-size: 0.8rem;
-          color: var(--text-dim);
+          display: none;
         }
 
         .start-upload-btn {

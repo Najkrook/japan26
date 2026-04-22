@@ -33,7 +33,14 @@ export const isHeicFile = (file: File): boolean => {
 };
 
 export const detectMediaKind = (file: File): MediaKind => {
+  // If browser reports it as video, trust it
   if (file.type.startsWith('video/')) {
+    return 'video';
+  }
+
+  // Common video extensions that might have missing/generic MIME types on some OS
+  const extension = getExtension(file.name);
+  if (VIDEO_EXTENSIONS.includes(extension)) {
     return 'video';
   }
 
@@ -41,7 +48,7 @@ export const detectMediaKind = (file: File): MediaKind => {
     return 'photo';
   }
 
-  return VIDEO_EXTENSIONS.includes(getExtension(file.name)) ? 'video' : 'photo';
+  return 'photo';
 };
 
 export const convertHeicToJpeg = async (file: File): Promise<File> => {
@@ -168,17 +175,46 @@ const loadVideo = (file: File): Promise<HTMLVideoElement> =>
   new Promise((resolve, reject) => {
     const video = document.createElement('video');
     const objectUrl = URL.createObjectURL(file);
-    video.preload = 'metadata';
+    
+    // Safety timeout to prevent hanging on corrupted or massive files
+    const timeout = setTimeout(() => {
+      cleanup();
+      reject(new Error('Videoinläsning tog för lång tid.'));
+    }, 12000);
+
+    const cleanup = () => {
+      clearTimeout(timeout);
+      URL.revokeObjectURL(objectUrl);
+      video.onloadedmetadata = null;
+      video.onseeked = null;
+      video.onerror = null;
+    };
+
+    video.preload = 'auto';
     video.playsInline = true;
     video.muted = true;
-    video.onloadeddata = () => {
-      URL.revokeObjectURL(objectUrl);
+    video.crossOrigin = 'anonymous';
+
+    video.onloadedmetadata = () => {
+      // Seek to 0.5s to get a good thumbnail instead of a black start frame
+      video.currentTime = 0.5;
+    };
+
+    video.onseeked = () => {
+      // Don't cleanup the URL yet, we need it to draw to canvas!
+      // We only cleanup metadata/events
+      clearTimeout(timeout);
+      video.onloadedmetadata = null;
+      video.onseeked = null;
+      video.onerror = null;
       resolve(video);
     };
+
     video.onerror = () => {
-      URL.revokeObjectURL(objectUrl);
-      reject(new Error('Kunde inte läsa videon.'));
+      cleanup();
+      reject(new Error('Kunde inte läsa videofilen.'));
     };
+
     video.src = objectUrl;
   });
 
@@ -223,14 +259,29 @@ export const createThumbnail = async (file: File, kind: MediaKind, maxSize = 600
   }
 
   if (kind === 'video') {
-    const video = await loadVideo(file);
-    const width = video.videoWidth || maxSize;
-    const height = video.videoHeight || maxSize;
-    const scale = Math.min(maxSize / width, maxSize / height, 1);
-    canvas.width = Math.max(1, Math.round(width * scale));
-    canvas.height = Math.max(1, Math.round(height * scale));
-    context.drawImage(video, 0, 0, canvas.width, canvas.height);
-    return canvasToBlob(canvas);
+    let video: HTMLVideoElement | null = null;
+    try {
+      video = await loadVideo(file);
+      const width = video.videoWidth || maxSize;
+      const height = video.videoHeight || maxSize;
+      const scale = Math.min(maxSize / width, maxSize / height, 1);
+      canvas.width = Math.max(1, Math.round(width * scale));
+      canvas.height = Math.max(1, Math.round(height * scale));
+      context.drawImage(video, 0, 0, canvas.width, canvas.height);
+      
+      // Cleanup the video resource now that we are done drawing
+      if (video.src) {
+        URL.revokeObjectURL(video.src);
+        video.src = '';
+      }
+      
+      return canvasToBlob(canvas);
+    } catch (err) {
+      if (video && video.src) {
+        URL.revokeObjectURL(video.src);
+      }
+      throw err;
+    }
   }
 
   const image = await loadImage(file);
