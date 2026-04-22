@@ -11,11 +11,14 @@ import {
   Timestamp,
   updateDoc,
   deleteDoc,
+  getDocs,
+  where,
 } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import type { CreateDayInput, Day, UpdateDayInput } from '../types';
 import { formatDateKey, formatDateSwedish, startOfDay } from '../utils/dateHelpers';
-import { mapDay } from '../utils/firestoreMappers';
+import { mapDay, mapMedia } from '../utils/firestoreMappers';
+import { useMediaActions } from './useMediaActions';
 
 interface DaysState {
   loaded: boolean;
@@ -35,6 +38,8 @@ const buildDayPayload = (input: CreateDayInput) => {
 };
 
 export const useDays = () => {
+  const { deleteMedia } = useMediaActions();
+
   const [state, setState] = useState<DaysState>({
     loaded: false,
     days: [],
@@ -108,7 +113,24 @@ export const useDays = () => {
   };
 
   const deleteDay = async (dayId: string) => {
-    await deleteDoc(doc(db, 'days', dayId));
+    try {
+      // 1. Fetch all media for this day
+      const mediaQuery = query(collection(db, 'media'), where('dayId', '==', dayId));
+      const mediaSnapshot = await getDocs(mediaQuery);
+      
+      const mediaItems = mediaSnapshot.docs.map(mapMedia);
+
+      // 2. Delete all retrieved media items
+      // This will cascade delete comments and Storage files via useMediaActions
+      const deleteMediaPromises = mediaItems.map(item => deleteMedia(item));
+      await Promise.all(deleteMediaPromises);
+
+      // 3. Delete the day document itself
+      await deleteDoc(doc(db, 'days', dayId));
+    } catch (error) {
+      console.error('Error cascading deletion for day:', error);
+      throw error;
+    }
   };
 
   const ensureDay = async (date: Date) => {

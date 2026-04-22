@@ -19,10 +19,6 @@ export interface MediaDimensions {
   height: number;
 }
 
-interface ParsedDateMetadata {
-  DateTimeOriginal?: Date;
-  CreateDate?: Date;
-}
 
 const VIDEO_EXTENSIONS = ['.mov', '.mp4', '.m4v', '.webm', '.avi'];
 
@@ -108,48 +104,39 @@ export const compressImage = async (file: File, kind: MediaKind): Promise<File> 
   }
 };
 
-const extractDateMetadata = async (file: File): Promise<ParsedDateMetadata | undefined> => {
-  try {
-    const metadata = await exifr.parse(file, {
-      pick: ['DateTimeOriginal', 'CreateDate'],
-    });
-
-    return metadata as ParsedDateMetadata | undefined;
-  } catch (error) {
-    console.warn('Could not read EXIF date metadata', error);
-    return undefined;
-  }
-};
-
-const extractGpsLocation = async (
-  file: File,
-): Promise<CapturedAtResult['location'] | undefined> => {
-  try {
-    const gps = await exifr.gps(file);
-
-    if (gps?.latitude !== undefined && gps?.longitude !== undefined) {
-      return {
-        latitude: gps.latitude,
-        longitude: gps.longitude,
-      };
-    }
-  } catch (error) {
-    console.warn('Could not read EXIF GPS metadata', error);
-  }
-
-  return undefined;
-};
-
 export const extractCapturedAt = async (
   file: File,
   kind: MediaKind = detectMediaKind(file),
 ): Promise<CapturedAtResult> => {
-  const [dateMetadata, location] = await Promise.all([
-    extractDateMetadata(file),
-    kind === 'photo' ? extractGpsLocation(file) : Promise.resolve(undefined),
-  ]);
+  let location: CapturedAtResult['location'] | undefined = undefined;
+  let candidate: Date | undefined = undefined;
 
-  const candidate = dateMetadata?.DateTimeOriginal ?? dateMetadata?.CreateDate;
+  if (kind === 'photo') {
+    try {
+      const metadata = await exifr.parse(file);
+
+      if (metadata) {
+        if (metadata.latitude !== undefined && metadata.longitude !== undefined) {
+          location = {
+            latitude: metadata.latitude,
+            longitude: metadata.longitude,
+          };
+        }
+        candidate = metadata.DateTimeOriginal ?? metadata.CreateDate;
+      }
+    } catch (error) {
+      console.warn('Could not read EXIF metadata in one pass, trying fallback', error);
+      // Fallback specifically for GPS if main parse failed (some HEIC files need this wrapper)
+      try {
+         const gps = await exifr.gps(file);
+         if (gps && gps.latitude !== undefined && gps.longitude !== undefined) {
+            location = { latitude: gps.latitude, longitude: gps.longitude };
+         }
+      } catch (e) {
+         console.warn('Fallback GPS read failed', e);
+      }
+    }
+  }
 
   if (candidate instanceof Date) {
     return { capturedAt: candidate, source: 'exif', location };

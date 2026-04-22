@@ -1,32 +1,46 @@
-import { deleteDoc, doc } from 'firebase/firestore';
+import { deleteDoc, doc, collection, query, where, getDocs } from 'firebase/firestore';
 import { deleteObject, ref } from 'firebase/storage';
 import { db, storage } from '../config/firebase';
 import type { Media } from '../types';
 
 export const useMediaActions = () => {
   const deleteMedia = async (item: Media) => {
+    if (!item?.id) {
+      console.warn('Cannot delete media: Missing ID');
+      return;
+    }
+
     try {
-      // 1. Delete Firestore document
+      // 0. Cascade Delete Comments (Non-blocking)
+      try {
+        const commentsQuery = query(collection(db, 'comments'), where('mediaId', '==', item.id));
+        const commentsSnapshot = await getDocs(commentsQuery);
+        const commentDeletePromises = commentsSnapshot.docs.map((commentDoc) => 
+          deleteDoc(doc(db, 'comments', commentDoc.id))
+        );
+        await Promise.all(commentDeletePromises);
+      } catch (err) {
+        console.warn(`Could not delete comments for media ${item.id}:`, err);
+      }
+
+      // 1. Delete original file and thumbnail from Storage (Non-blocking)
+      if (item.storagePath) {
+        try {
+          const mediaRef = ref(storage, item.storagePath);
+          await deleteObject(mediaRef).catch(() => {});
+          
+          const thumbPath = item.storagePath.replace('media/', 'thumbnails/');
+          const thumbRef = ref(storage, thumbPath);
+          await deleteObject(thumbRef).catch(() => {});
+        } catch (err) {
+          console.warn(`Could not delete storage files for media ${item.id}:`, err);
+        }
+      }
+
+      // 2. Delete Firestore document (Final step)
       await deleteDoc(doc(db, 'media', item.id));
-
-      // 2. Delete original file from Storage
-      if (item.storagePath) {
-        const mediaRef = ref(storage, item.storagePath);
-        await deleteObject(mediaRef);
-      }
-
-      // 3. Delete thumbnail from Storage
-      // Based on UploadPanel.tsx: thumbPath = thumbnails/{dayId}/{id}.{ext}
-      // Since thumbnailUrl is a full URL, we construct the path from storagePath
-      if (item.storagePath) {
-        const thumbPath = item.storagePath.replace('media/', 'thumbnails/');
-        const thumbRef = ref(storage, thumbPath);
-        await deleteObject(thumbRef).catch((err) => {
-          console.warn('Could not delete thumbnail, it might not exist:', err);
-        });
-      }
     } catch (error) {
-      console.error('Error deleting media:', error);
+      console.error('Error in deleteMedia:', error);
       throw error;
     }
   };

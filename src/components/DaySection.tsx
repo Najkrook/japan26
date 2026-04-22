@@ -247,11 +247,39 @@ const DaySection: React.FC<DaySectionProps> = ({
           font-weight: 500;
           font-size: 0.85rem;
           margin-bottom: 0.5rem;
-          font-family: var(--font-main);
-          letter-spacing: 0.05em;
+          font-family: var(--font-mono); /* Space Grotesk in dark mode via variable */
+          letter-spacing: 0.15em;
           text-transform: uppercase;
           opacity: 0.8;
-          font-style: italic;
+        }
+
+        .journal-card {
+          position: relative;
+          background: var(--surface-color);
+          border-radius: var(--radius-lg);
+          padding: 3rem;
+          margin-left: 6rem; /* Space for the timeline track */
+          transition: all 0.4s ease;
+          border: 1px solid var(--border-color);
+        }
+
+        /* Electric Noir specific card flair */
+        [data-theme='dark'] .journal-card::before {
+          content: '';
+          position: absolute;
+          left: 0;
+          top: 2rem;
+          bottom: 2rem;
+          width: 3px;
+          background: linear-gradient(to bottom, var(--primary), var(--secondary));
+          box-shadow: 0 0 15px var(--primary);
+          border-radius: 0 2px 2px 0;
+        }
+
+        [data-theme='dark'] .journal-card {
+          border: none;
+          box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
+          background: linear-gradient(145deg, #1e1f25 0%, #121318 100%);
         }
 
         .card-title {
@@ -262,8 +290,9 @@ const DaySection: React.FC<DaySectionProps> = ({
           font-weight: 700;
         }
 
-        .card-body {
-          margin-bottom: 2.5rem;
+        [data-theme='dark'] .card-title {
+          text-transform: uppercase;
+          letter-spacing: 0.05em;
         }
 
         .card-body-text {
@@ -275,8 +304,8 @@ const DaySection: React.FC<DaySectionProps> = ({
 
         .editor-input-short {
           width: 100%;
-          background: rgba(255, 255, 255, 0.6);
-          border: 1px solid rgba(0,0,0,0.05);
+          background: var(--glass-bg);
+          border: 1px solid var(--border-color);
           border-radius: var(--radius-sm);
           padding: 0.85rem 1.25rem;
           font-family: var(--font-main);
@@ -287,31 +316,40 @@ const DaySection: React.FC<DaySectionProps> = ({
           outline: none;
         }
 
+        [data-theme='dark'] .editor-input-short:focus {
+          border-color: var(--secondary);
+          box-shadow: 0 0 10px var(--secondary);
+        }
+
         .inline-edit-trigger {
           display: flex;
           align-items: center;
           gap: 0.6rem;
           color: var(--primary);
-          opacity: 0.45;
+          opacity: 0.6;
           font-size: 0.9rem;
-          font-weight: 500;
+          font-weight: 600;
+          font-family: var(--font-mono);
           margin-top: 1.5rem;
           padding: 0.6rem 0;
           transition: all 0.2s;
+          text-transform: uppercase;
+          letter-spacing: 0.1em;
         }
 
         .inline-edit-trigger:hover {
           opacity: 1;
           transform: translateX(4px);
+          color: var(--secondary);
         }
 
         .inline-editor {
           margin-top: 2rem;
-          background: rgba(255, 255, 255, 0.5);
+          background: var(--glass-bg);
           border: 1px solid var(--glass-border);
           border-radius: var(--radius-md);
           padding: 0.75rem;
-          backdrop-filter: blur(8px);
+          backdrop-filter: blur(20px);
         }
 
         .editor-textarea {
@@ -327,49 +365,24 @@ const DaySection: React.FC<DaySectionProps> = ({
           outline: none;
         }
 
-        .editor-actions {
-          display: flex;
-          justify-content: flex-end;
-          gap: 0.75rem;
-          padding: 0.5rem 1.25rem 0.75rem;
-        }
-
-        .editor-btn {
-          display: flex;
-          align-items: center;
-          gap: 0.4rem;
-          padding: 0.5rem 1.25rem;
-          border-radius: var(--radius-full);
-          font-size: 0.9rem;
-          font-weight: 600;
-        }
-
-        .editor-btn.cancel {
-          color: var(--text-muted);
-        }
-
-        .editor-btn.cancel:hover {
-          background: rgba(0,0,0,0.04);
-        }
-
         .editor-btn.save {
           background: var(--primary);
           color: white;
-          box-shadow: 0 4px 12px rgba(188, 0, 45, 0.2);
+          box-shadow: 0 4px 15px rgba(var(--primary-rgb), 0.3);
         }
 
-        .editor-btn.save:hover {
-          background: var(--primary-hover);
-          transform: translateY(-1px);
+        [data-theme='dark'] .editor-btn.save {
+          background: linear-gradient(135deg, var(--primary) 0%, #ff4a8d 100%);
+          box-shadow: 0 0 20px rgba(255, 0, 127, 0.4);
         }
 
         .empty-state-card {
           padding: 4rem 1.5rem;
           text-align: center;
-          background: rgba(0,0,0,0.02);
+          background: var(--primary-light);
           border-radius: var(--radius-md);
-          color: var(--text-muted);
-          border: 1px dashed rgba(0,0,0,0.08);
+          color: var(--text-dim);
+          border: 1px dashed var(--border-color);
         }
 
         @media (max-width: 640px) {

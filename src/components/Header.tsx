@@ -1,33 +1,59 @@
 import React from 'react';
-import { Plus, User } from 'lucide-react';
+import { Plus, User, Moon, Sun } from 'lucide-react';
 interface HeaderProps {
   canPost?: boolean;
   isAdminPanelOpen?: boolean;
   onToggleAdminPanel?: () => void;
   onLoginClick?: () => void;
+  onHankoClick?: () => void;
+  theme?: 'light' | 'dark';
+  onToggleTheme?: () => void;
 }
 
-const Header: React.FC<HeaderProps> = ({ canPost, onToggleAdminPanel, onLoginClick }) => {
+const Header: React.FC<HeaderProps> = ({ 
+  canPost, 
+  onToggleAdminPanel, 
+  onLoginClick, 
+  onHankoClick,
+  theme = 'light',
+  onToggleTheme
+}) => {
   return (
     <header className="main-header">
       <div className="header-content">
-        <div className="hanko-seal" title="Sakura Seal">
-          <span className="seal-text">印</span>
+        <div className="header-left">
+          <button 
+            type="button" 
+            className="hanko-seal-square" 
+            title="Klicka för stämpelbok"
+            onClick={onHankoClick}
+          >
+            日
+          </button>
         </div>
 
         <div className="logo-text">
-          <h1>Japan Journal</h1>
+          <h1>Japan <span>Journal</span></h1>
         </div>
 
-        <div className="header-actions">
-          {canPost && (
-            <button className="header-icon-btn" onClick={onToggleAdminPanel} title="Adminverktyg">
-              <Plus size={20} />
+        <div className="header-right">
+          <div className="header-actions">
+            {canPost && (
+              <button className="header-icon-btn" onClick={onToggleAdminPanel} title="Adminverktyg">
+                <Plus size={20} />
+              </button>
+            )}
+            <button className="header-icon-btn" onClick={onLoginClick} title="Logga in">
+              <User size={18} />
             </button>
-          )}
-          <button className="header-icon-btn" onClick={onLoginClick} title="Logga in">
-            <User size={18} />
-          </button>
+            <button 
+              className="header-icon-btn" 
+              onClick={onToggleTheme}
+              title={theme === 'light' ? 'Växla till mörkt läge' : 'Växla till ljust läge'}
+            >
+              {theme === 'light' ? <Moon size={18} /> : <Sun size={18} />}
+            </button>
+          </div>
         </div>
       </div>
 
@@ -36,16 +62,15 @@ const Header: React.FC<HeaderProps> = ({ canPost, onToggleAdminPanel, onLoginCli
           position: sticky;
           top: 0;
           z-index: 100;
-          padding: 1.25rem 0;
-          background: rgba(252, 249, 242, 0.85); /* Matches --neutral with opacity */
-          backdrop-filter: blur(14px) saturate(160%);
-          -webkit-backdrop-filter: blur(14px) saturate(160%);
-          border-bottom: 1px solid rgba(188, 0, 45, 0.04);
+          padding: 1rem 0;
+          background: var(--glass-bg);
+          backdrop-filter: blur(10px);
+          border-bottom: 1px solid var(--border-color);
           transition: all 0.3s ease;
         }
 
         .header-content {
-          max-width: 1200px;
+          max-width: 1400px;
           margin: 0 auto;
           padding: 0 2rem;
           display: grid;
@@ -53,67 +78,76 @@ const Header: React.FC<HeaderProps> = ({ canPost, onToggleAdminPanel, onLoginCli
           align-items: center;
         }
 
-        .hanko-seal {
-          width: 36px;
-          height: 36px;
-          border-radius: 8px; /* Square with slight rounding for more authentic seal look */
-          background: rgba(188, 0, 45, 0.03);
-          color: var(--primary);
+        .header-left {
+          display: flex;
+          align-items: center;
+        }
+
+        .hanko-seal-square {
+          width: 32px;
+          height: 32px;
+          background: var(--primary);
+          color: white;
+          border: none;
+          border-radius: 4px;
           display: flex;
           align-items: center;
           justify-content: center;
-          border: 1px solid rgba(188, 0, 45, 0.15);
-          transition: all 0.4s cubic-bezier(0.19, 1, 0.22, 1);
-          cursor: pointer;
-        }
-
-        .hanko-seal:hover {
-          transform: rotate(-10deg) scale(1.1);
-          background: rgba(188, 0, 45, 0.08);
-          box-shadow: 0 4px 15px rgba(188, 0, 45, 0.1);
-        }
-
-        .seal-text {
           font-family: var(--font-heading);
-          font-size: 0.9rem;
           font-weight: 700;
-          opacity: 0.85;
+          font-size: 1.1rem;
+          cursor: pointer;
+          box-shadow: 0 2px 8px rgba(var(--primary-rgb), 0.2);
+          transition: transform 0.2s ease;
+        }
+
+        .hanko-seal-square:hover {
+          transform: scale(1.05);
+        }
+
+        .logo-text h1 {
+          font-family: var(--font-heading);
+          font-size: 1.5rem;
+          color: var(--text-main);
+          font-weight: 600;
+          letter-spacing: 0.02em;
+          margin: 0;
+        }
+
+        .logo-text h1 span {
+          font-weight: 400;
+          font-style: italic;
+          opacity: 0.9;
+        }
+
+        .header-right {
+          display: flex;
+          justify-content: flex-end;
         }
 
         .header-actions {
-          justify-self: end;
           display: flex;
-          gap: 0.75rem;
+          gap: 0.5rem;
           align-items: center;
         }
 
         .header-icon-btn {
           color: var(--text-dim);
-          width: 40px;
-          height: 40px;
+          width: 36px;
+          height: 36px;
           display: flex;
           align-items: center;
           justify-content: center;
-          border-radius: 12px;
+          border-radius: 8px;
           background: transparent;
+          border: none;
+          cursor: pointer;
+          transition: all 0.2s ease;
         }
 
         .header-icon-btn:hover {
-          background: rgba(188, 0, 45, 0.05);
+          background: var(--primary-light);
           color: var(--primary);
-          transform: translateY(-2px);
-        }
-
-        .logo-text h1 {
-          font-family: var(--font-heading);
-          font-size: 1.6rem;
-          color: var(--text-main);
-          font-weight: 700;
-          font-style: italic;
-          letter-spacing: -0.01em;
-          background: linear-gradient(135deg, var(--text-main) 0%, var(--primary) 150%);
-          -webkit-background-clip: text;
-          -webkit-text-fill-color: transparent;
         }
 
         @media (max-width: 640px) {
@@ -121,7 +155,7 @@ const Header: React.FC<HeaderProps> = ({ canPost, onToggleAdminPanel, onLoginCli
             padding: 0 1rem;
           }
           .logo-text h1 {
-            font-size: 1.35rem;
+            font-size: 1.2rem;
           }
         }
       `}</style>

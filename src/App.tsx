@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo, useEffect } from 'react';
 import { AnimatePresence, motion, useScroll, useSpring } from 'framer-motion';
-import { Image as ImageIcon, Loader2, X } from 'lucide-react';
+import { Image as ImageIcon, Loader2, X, Trash2, AlertTriangle } from 'lucide-react';
 import AdminLogin from './components/AdminLogin';
 import DaySection from './components/DaySection';
 import Header from './components/Header';
@@ -11,10 +11,13 @@ import UploadPanel from './components/UploadPanel';
 import DayEditor from './components/DayEditor';
 import BottomNav, { type TabType } from './components/BottomNav';
 import MapTab from './components/MapTab';
+import StampBook from './components/StampBook';
 import { useAdmin } from './hooks/useAdmin';
 import { useDays } from './hooks/useDays';
 import { useMediaActions } from './hooks/useMediaActions';
 import { useUserName } from './hooks/useUserName';
+import { useAllMedia } from './hooks/useAllMedia';
+import { useMaintenance } from './hooks/useMaintenance';
 import type { Media } from './types';
 import { warmLightboxPhotos } from './utils/imagePreload';
 
@@ -25,6 +28,8 @@ function App() {
   const { isAdmin, canPost, authorizationError, loading: authLoading, loginWithGoogle } = useAdmin();
   const { days, loading: daysLoading, createDay, updateDay, deleteDay, ensureDay } = useDays();
   const { deleteMedia } = useMediaActions();
+  const { media: allMedia } = useAllMedia();
+  const { orphanedMedia, isCleaning, lastCleanCount, lastFailCount, cleanupOrphanedMedia } = useMaintenance(days, allMedia);
 
   const [activeDayId, setActiveDayId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<TabType>('journal');
@@ -34,10 +39,25 @@ function App() {
   const [loginLoading, setLoginLoading] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
   const [isAdminPanelOpen, setIsAdminPanelOpen] = useState(false);
+  const [isStampBookOpen, setIsStampBookOpen] = useState(false);
+
+  // Theme Management
+  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
+    return (localStorage.getItem('japan-journal-theme') as 'light' | 'dark') || 'light';
+  });
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('japan-journal-theme', theme);
+  }, [theme]);
+
+  const toggleTheme = useCallback(() => {
+    setTheme(prev => prev === 'light' ? 'dark' : 'light');
+  }, []);
 
   // Animated scroll progress for the timeline
   const { scrollYProgress } = useScroll();
-  
+
   // Apply a gentle spring physics for buttery smooth mobile scrolling
   const scaleY = useSpring(scrollYProgress, {
     stiffness: 100,
@@ -109,18 +129,21 @@ function App() {
     <div className="app-container">
       <AnimatePresence>{!hasName && <NamePrompt onSave={saveUserName} />}</AnimatePresence>
 
-      <SakuraBackground />
+      <SakuraBackground isDarkMode={theme === 'dark'} />
       <Header
         canPost={canPost}
         isAdminPanelOpen={isAdminPanelOpen}
+        theme={theme}
         onToggleAdminPanel={() => setIsAdminPanelOpen(!isAdminPanelOpen)}
         onLoginClick={() => setShowAdminLogin(true)}
+        onHankoClick={() => setIsStampBookOpen(true)}
+        onToggleTheme={toggleTheme}
       />
 
       <div style={{ display: activeTab === 'map' ? 'block' : 'none', height: '100%' }}>
-        <MapTab onMediaOpen={handleOpenLightbox} />
+        <MapTab isActive={activeTab === 'map'} onMediaOpen={handleOpenLightbox} />
       </div>
-      
+
       <div style={{ display: activeTab === 'journal' ? 'block' : 'none' }}>
         <main
           className="main-content"
@@ -128,96 +151,144 @@ function App() {
           data-loading-copy={loadingMediaLabel}
         >
           <div className="ethereal-cover fade-in">
-            <div className="cover-title-stack">
-              <span className="cover-title">Japan</span>
-              <span className="cover-year">2026</span>
-            </div>
-            <p className="cover-description">
-              Följ vårt äventyr i Japan 🌸🗾🍙.
+            <h1 className="hero-title-main">Japan</h1>
+            <div className="hero-year-main">2026</div>
+            <p className="hero-tagline">Följ äventyret i Japan 🌸🗾🍙</p>
+            <p className="hero-description-small">
+              わかったよ、君は自分で読めないものを翻訳するのが好きなんだね。君が頭がいいってわかるように、ニヤリとした絵文字を送ってくれ。
             </p>
           </div>
 
-          <AnimatePresence>
-          {canPost && isAdminPanelOpen && (
-            <motion.div
-              className="admin-panel-overlay fade-in"
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-            >
-              <div className="admin-content-card">
-                <div className="admin-header">
-                  <h3>Adminverktyg</h3>
-                  <button onClick={() => setIsAdminPanelOpen(false)}><X size={20} /></button>
-                </div>
-                <div className="admin-body">
-                  {isAdmin && (
-                    <DayEditor
-                      days={days}
-                      selectedDay={selectedDay}
-                      createDay={createDay}
-                      updateDay={updateDay}
-                      onSelectDay={(id) => setActiveDayId(id)}
-                    />
-                  )}
-                  <UploadPanel
-                    days={days}
-                    selectedDay={selectedDay}
-                    ensureDay={ensureDay}
-                    onUploadComplete={(id) => setActiveDayId(id)}
-                  />
-                </div>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+          <div className="content-container">
+            <AnimatePresence>
+              {canPost && isAdminPanelOpen && (
+                <motion.div
+                  className="admin-panel-overlay fade-in"
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                >
+                  <div className="admin-content-card">
+                    <div className="admin-header">
+                      <h3>Adminverktyg</h3>
+                      <button onClick={() => setIsAdminPanelOpen(false)}><X size={20} /></button>
+                    </div>
+                    <div className="admin-body">
+                      {isAdmin && (
+                        <DayEditor
+                          days={days}
+                          selectedDay={selectedDay}
+                          createDay={createDay}
+                          updateDay={updateDay}
+                          onSelectDay={(id) => setActiveDayId(id)}
+                        />
+                      )}
+                      <UploadPanel
+                        days={days}
+                        selectedDay={selectedDay}
+                        ensureDay={ensureDay}
+                        onUploadComplete={(id) => setActiveDayId(id)}
+                      />
 
-        <section className="timeline-section">
-          {/* Animated Timeline */}
-          <div className="timeline-track" />
-          <motion.div 
-            className="timeline-fill" 
-            style={{ scaleY, transformOrigin: 'top' }}
-          />
-          {daysLoading ? (
-            <div className="ethereal-loading-state fade-in">
-              <div className="sakura-spinner">🌸</div>
-              <p>Hämtar tidslinjen...</p>
-            </div>
-          ) : days.length > 0 ? (
-            <div className="days-list">
-              {days.map((day) => (
-                <DaySection
-                  key={day.id}
-                  day={day}
-                  isActive={activeDayId === day.id}
-                  isAdmin={isAdmin}
-                  canPost={canPost}
-                  authorizationError={authorizationError}
-                  onVisible={handleDayVisible}
-                  onMediaClick={handleOpenLightbox}
-                  onUpdateDay={updateDay}
-                  onDeleteDay={deleteDay}
-                  onDeleteMedia={deleteMedia}
-                />
-              ))}
-            </div>
-          ) : (
-            <div className="empty-state-main">
-              <div className="empty-icon-large">
-                <ImageIcon size={64} />
-              </div>
-              <h2>Ingen resa än</h2>
-              <p>Börja med att ladda upp bilder för att starta din journal.</p>
-            </div>
-          )}
-        </section>
-      </main>
+                      {isAdmin && orphanedMedia.length > 0 && (
+                        <div className="maintenance-section">
+                          <div className="maintenance-header">
+                            <AlertTriangle size={16} className="warning-icon" />
+                            <h4>Systemunderhåll</h4>
+                          </div>
+                          <p>Hittade {orphanedMedia.length} föräldralösa bilder som saknar en dag.</p>
+                          <button
+                            className="cleanup-btn"
+                            onClick={() => {
+                              if (window.confirm(`Vill du permanent radera ${orphanedMedia.length} bilder? Detta kan inte ångras.`)) {
+                                cleanupOrphanedMedia();
+                              }
+                            }}
+                            disabled={isCleaning}
+                          >
+                            <Trash2 size={16} />
+                            {isCleaning ? 'Rensar...' : 'Rensa föräldralösa bilder'}
+                          </button>
+                        </div>
+                      )}
+
+                      {lastCleanCount !== null && (
+                        <div className="maintenance-success fade-in">
+                          {lastFailCount === null ? (
+                            <>✅ {lastCleanCount} bilder har raderats permanent.</>
+                          ) : (
+                            <>
+                              ⚠️ {lastCleanCount} raderade, {lastFailCount} misslyckades.
+                              <span style={{ display: 'block', fontSize: '0.75rem', marginTop: '0.25rem', fontWeight: 400 }}>
+                                Prova att rensa igen eller kontakta support om felet kvarstår.
+                              </span>
+                            </>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            <section className="timeline-section">
+              {days.length > 0 && (
+                <>
+                  <div className="timeline-track" />
+                  <motion.div
+                    className="timeline-fill"
+                    style={{ scaleY, transformOrigin: 'top' }}
+                  />
+                </>
+              )}
+              {daysLoading ? (
+                <div className="ethereal-loading-state fade-in">
+                  <div className="sakura-spinner">🌸</div>
+                  <p>Hämtar tidslinjen...</p>
+                </div>
+              ) : days.length > 0 ? (
+                <div className="days-list">
+                  {days.map((day) => (
+                    <DaySection
+                      key={day.id}
+                      day={day}
+                      isActive={activeDayId === day.id}
+                      isAdmin={isAdmin}
+                      canPost={canPost}
+                      authorizationError={authorizationError}
+                      onVisible={handleDayVisible}
+                      onMediaClick={handleOpenLightbox}
+                      onUpdateDay={updateDay}
+                      onDeleteDay={deleteDay}
+                      onDeleteMedia={deleteMedia}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <div className="empty-state-card fade-in">
+                  <div className="empty-icon-container">
+                    <ImageIcon size={32} />
+                  </div>
+                  <h2>Ingen resa än</h2>
+                  <p>Börja med att ladda upp bilder för att starta din journal.</p>
+                  <button
+                    className="add-first-memory-btn"
+                    onClick={() => setIsAdminPanelOpen(true)}
+                  >
+                    <ImageIcon size={18} />
+                    Lägg till första minnet
+                  </button>
+                </div>
+              )}
+            </section>
+          </div>
+        </main>
       </div>
 
       <BottomNav activeTab={activeTab} onTabChange={setActiveTab} />
 
-      <div 
+      <div
         aria-hidden={!selectedMedia}
         style={{
           position: 'fixed',
@@ -264,6 +335,13 @@ function App() {
         )}
       </AnimatePresence>
 
+      <StampBook
+        isOpen={isStampBookOpen}
+        onClose={() => setIsStampBookOpen(false)}
+        days={days}
+        media={allMedia}
+      />
+
       <style>{`
         .admin-panel-overlay {
           position: fixed;
@@ -285,11 +363,12 @@ function App() {
           max-width: 800px;
           max-height: 90vh;
           overflow-y: auto;
-          background: white;
+          background: var(--surface-color);
           border-radius: var(--radius-lg);
           padding: 2.5rem;
-          box-shadow: var(--shadow-lg);
-          border: 1px solid var(--glass-border);
+          box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+          border: 1px solid var(--border-color);
+          color: var(--text-main);
         }
 
         .admin-header {
@@ -300,95 +379,111 @@ function App() {
           padding-bottom: 1rem;
           border-bottom: 1px solid var(--border-color);
         }
-
-        }
-
         .ethereal-cover {
           text-align: center;
-          margin-bottom: 8rem;
-          margin-top: 4rem;
+          padding: 8rem 0 6rem;
           position: relative;
-          z-index: 10;
-          /* Force centering within the narrow content column */
-          margin-left: auto;
-          margin-right: auto;
-        }
-
-        .cover-title-stack {
           display: flex;
           flex-direction: column;
           align-items: center;
-          line-height: 0.9;
-          margin-bottom: 2.5rem;
         }
 
-        .cover-title {
+        .hero-title-main {
           font-family: var(--font-heading);
-          font-size: clamp(3.5rem, 8vw, 7rem);
-          line-height: 1;
-          letter-spacing: -0.04em;
-          font-weight: 700;
-          /* Gradient: dark at top, red at bottom — fixed stop so red is reachable */
-          background: linear-gradient(175deg, var(--text-main) 0%, var(--primary) 100%);
-          -webkit-background-clip: text;
-          -webkit-text-fill-color: transparent;
-          background-clip: text;
-          display: block;
-        }
-
-        .cover-year {
-          font-family: var(--font-heading);
-          font-size: clamp(2.5rem, 6.5vw, 6rem);
-          line-height: 1;
-          letter-spacing: -0.03em;
-          font-weight: 400;
-          font-style: italic;
-          /* Year is in red — gives a clear two-tone effect */
+          font-size: clamp(5rem, 15vw, 9rem);
           color: var(--primary);
-          opacity: 0.85;
-          display: block;
+          margin: 0;
+          font-weight: 700;
+          line-height: 1;
         }
 
-        .cover-description {
-          font-family: var(--font-main);
-          font-size: clamp(1rem, 1.5vw, 1.2rem);
-          line-height: 1.8;
+        .hero-year-main {
+          font-family: var(--font-heading);
+          font-size: clamp(2rem, 5vw, 3.5rem);
+          color: var(--primary);
+          letter-spacing: 0.6em;
+          margin: 0.5rem 0 2rem;
+          padding-left: 0.6em;
+          font-weight: 700;
+        }
+
+        .hero-tagline {
+          font-family: var(--font-heading);
+          font-size: clamp(1.1rem, 1.8vw, 1.6rem);
           color: var(--text-dim);
-          max-width: 480px;
-          margin: 0 auto;
           font-style: italic;
-          opacity: 0.85;
+          margin-bottom: 0.5rem;
+          opacity: 0.8;
         }
 
-        .empty-state-main {
+        .hero-description-small {
+          font-family: var(--font-main);
+          font-size: 1rem;
+          color: var(--text-dim);
+          opacity: 0.7;
+          letter-spacing: 0.05em;
+        }
+
+        .empty-state-card {
+          max-width: 600px;
+          margin: 2rem auto;
+          background: var(--surface-color);
+          padding: 4rem 2rem;
+          border-radius: 20px;
+          box-shadow: var(--shadow-md);
           text-align: center;
-          padding: 8rem 2rem;
-          color: var(--text-muted);
-          background: rgba(255, 255, 255, 0.4);
-          border-radius: var(--radius-lg);
-          border: 1px solid var(--glass-border);
-          backdrop-filter: blur(8px);
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          border: 1px solid var(--border-color);
         }
 
-        .empty-icon-large {
-          color: var(--secondary);
+        .empty-icon-container {
+          width: 80px;
+          height: 80px;
+          border-radius: 50%;
+          background: var(--primary-light);
+          color: var(--primary);
+          display: flex;
+          align-items: center;
+          justify-content: center;
           margin-bottom: 2rem;
-          opacity: 0.6;
+          box-shadow: inset 0 2px 4px rgba(188, 0, 45, 0.05);
         }
 
-        @media (max-width: 768px) {
-          .ethereal-cover {
-            margin-bottom: 5rem;
-            margin-top: 2rem;
-          }
-          .cover-title {
-            font-size: 3.5rem;
-          }
+        .empty-state-card h2 {
+          font-family: var(--font-heading);
+          font-size: 2rem;
+          margin-bottom: 1rem;
+          color: var(--text-main);
+        }
 
-          .cover-description {
-            max-width: 90%;
-            font-size: 1.05rem;
-          }
+        .empty-state-card p {
+          color: var(--text-dim);
+          margin-bottom: 2.5rem;
+          max-width: 320px;
+        }
+
+        .add-first-memory-btn {
+          background: var(--primary);
+          color: white;
+          border: none;
+          padding: 1rem 2rem;
+          border-radius: 50px;
+          font-size: 1rem;
+          font-weight: 600;
+          display: flex;
+          align-items: center;
+          gap: 0.75rem;
+          cursor: pointer;
+          transition: all 0.3s ease;
+          box-shadow: 0 4px 15px rgba(188, 0, 45, 0.2);
+        }
+
+        .add-first-memory-btn:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 8px 25px rgba(188, 0, 45, 0.3);
+          background: var(--primary-hover, #9E0026);
         }
 
         .ethereal-loading-state {
@@ -410,6 +505,41 @@ function App() {
           0% { transform: rotate(0deg) scale(1); }
           50% { transform: rotate(180deg) scale(1.1); }
           100% { transform: rotate(360deg) scale(1); }
+        }
+
+        .timeline-section {
+          position: relative;
+          max-width: 900px;
+          margin: 0 auto;
+          min-height: 400px;
+        }
+
+        .timeline-track {
+          position: absolute;
+          left: calc(3rem - 1px);
+          top: 0;
+          bottom: 0;
+          width: 1px;
+          background: var(--border-color);
+          z-index: 0;
+          opacity: 0.5;
+        }
+
+        .timeline-fill {
+          position: absolute;
+          left: calc(3rem - 1px);
+          top: 0;
+          bottom: 0;
+          width: 3px;
+          background: var(--primary);
+          z-index: 1;
+        }
+
+        [data-theme='dark'] .timeline-fill {
+          width: 2px;
+          left: calc(3rem - 1px);
+          background: linear-gradient(to bottom, var(--primary), var(--secondary));
+          box-shadow: 0 0 15px var(--primary);
         }
 
         .ethereal-loading-state p {

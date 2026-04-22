@@ -1,37 +1,48 @@
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Noto+Serif:ital,wght@0,400;0,700;1,400;1,700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Noto+Serif:ital,wght@0,400;0,700;1,400;1,700&family=Space+Grotesk:wght@400;500;600;700&display=swap');
 @import 'leaflet/dist/leaflet.css';
 
 :root {
-  /* Color Palette - Sakura Ethereal 2.0 Design System */
-  --primary: #BC002D; /* Deep Hinomaru Red - slightly warmer */
-  --primary-hover: #9E0026;
-  
-  --secondary: #EBC4D0; /* Soft Pink / Pale Cherry Blossom */
-  --tertiary: #FDE2E4; /* Soft Rose Background Pink */
-  
-  --neutral: #FCF9F2; /* Creamy Washi Paper Tone - warmer and more premium */
-  --surface-color: #ffffff;
-  
-  --text-main: #2D2D32;
-  --text-dim: #5C5C66;
-  --text-muted: #8E8E93;
-  
-  --border-color: rgba(188, 0, 45, 0.1);
-  --glass-border: rgba(255, 255, 255, 0.4);
-  
+  /* Common System Scales */
   --radius-sm: 14px;
   --radius-md: 20px;
   --radius-lg: 32px;
   --radius-full: 9999px;
-  
+  --font-main: 'Inter', system-ui, sans-serif;
+  --font-heading: 'Noto Serif', serif;
+  --font-mono: 'Space Grotesk', monospace;
+
+  /* Theme: Light (Classic Red) */
+  --primary: #BC002D;
+  --primary-rgb: 188, 0, 45;
+  --primary-light: #ffebf0;
+  --neutral: #FCF9F2;
+  --surface-color: #ffffff;
+  --text-main: #2D2D32;
+  --text-dim: #5C5C66;
+  --text-muted: #8E8E93;
+  --border-color: rgba(188, 0, 45, 0.1);
+  --glass-bg: rgba(255, 255, 255, 0.85);
+  --glass-border: rgba(255, 255, 255, 0.4);
+}
+
+[data-theme='dark'] {
+  /* Theme: Dark (Electric Noir) */
+  --primary: #FF007F; /* Neon Pink */
+  --primary-rgb: 255, 0, 127;
+  --primary-light: rgba(255, 0, 127, 0.15);
+  --secondary: #00FFFF; /* Neon Cyan */
+  --neutral: #0A0B10; /* The Void */
+  --surface-color: #121318;
+  --text-main: #E3E1E9;
+  --text-dim: #A9A9B2;
+  --text-muted: #62626A;
+  --border-color: rgba(255, 0, 127, 0.15);
+  --glass-bg: rgba(18, 19, 24, 0.7);
+  --glass-border: rgba(255, 0, 127, 0.1);
   --shadow-sm: 0 4px 20px rgba(0, 0, 0, 0.02);
   --shadow-md: 0 12px 40px rgba(0, 0, 0, 0.04);
   --shadow-lg: 0 24px 60px rgba(188, 0, 45, 0.08); /* Soft red-tinted glow */
-  
-  --font-main: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
-  --font-heading: 'Noto Serif', serif;
 }
-
 
 * {
   box-sizing: border-box;
@@ -87,10 +98,13 @@ button {
 .main-content {
   flex: 1;
   width: 100%;
-  max-width: 840px; /* Refined focus view */
-  margin: 0 auto;
-  padding: 2rem 1rem 12rem;
   position: relative;
+}
+
+.content-container {
+  max-width: 840px;
+  margin: 0 auto;
+  padding: 0 1rem;
 }
 
 .timeline-track {

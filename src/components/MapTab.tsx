@@ -18,6 +18,7 @@ const DefaultIcon = L.icon({
 L.Marker.prototype.options.icon = DefaultIcon;
 
 interface MapTabProps {
+  isActive?: boolean;
   onMediaOpen?: (media: Media[], index: number) => void;
 }
 
@@ -38,7 +39,23 @@ const FitMapToBounds: React.FC<{ bounds: MapBounds | null }> = ({ bounds }) => {
   return null;
 };
 
-const MapTab: React.FC<MapTabProps> = ({ onMediaOpen }) => {
+const MapResizer: React.FC<{ isActive: boolean }> = ({ isActive }) => {
+  const map = useMap();
+
+  React.useEffect(() => {
+    if (isActive) {
+      // Small timeout ensures the DOM has fully rendered the grid before invalidating
+      const timeoutId = setTimeout(() => {
+        map.invalidateSize();
+      }, 50);
+      return () => clearTimeout(timeoutId);
+    }
+  }, [isActive, map]);
+
+  return null;
+};
+
+const MapTab: React.FC<MapTabProps> = ({ isActive = true, onMediaOpen }) => {
   const { media, loading, error } = useAllMedia();
   const mapMedia = React.useMemo(() => getMapMedia(media), [media]);
   const bounds = React.useMemo(() => getMapBounds(mapMedia), [mapMedia]);
@@ -81,6 +98,7 @@ const MapTab: React.FC<MapTabProps> = ({ onMediaOpen }) => {
             scrollWheelZoom
             className="leaflet-container"
           >
+            <MapResizer isActive={isActive} />
             <FitMapToBounds bounds={bounds} />
             <TileLayer
               attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
