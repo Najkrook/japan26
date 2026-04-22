@@ -190,6 +190,7 @@ function App() {
                 <DaySection
                   key={day.id}
                   day={day}
+                  isActive={activeDayId === day.id}
                   isAdmin={isAdmin}
                   canPost={canPost}
                   authorizationError={authorizationError}

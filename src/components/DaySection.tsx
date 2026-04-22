@@ -6,10 +6,12 @@ import { useMedia } from '../hooks/useMedia';
 import { useDayCommentCounts } from '../hooks/useDayCommentCounts';
 import MediaGrid from './MediaGrid';
 import { formatDateSwedish } from '../utils/dateHelpers';
+import { preloadImageUrl } from '../utils/imagePreload';
 import type { Day, Media, UpdateDayInput } from '../types';
 
 interface DaySectionProps {
   day: Day;
+  isActive: boolean;
   isAdmin: boolean;
   canPost: boolean;
   authorizationError: string | null;
@@ -22,6 +24,7 @@ interface DaySectionProps {
 
 const DaySection: React.FC<DaySectionProps> = ({
   day,
+  isActive,
   isAdmin,
   onVisible,
   onMediaClick,
@@ -29,11 +32,12 @@ const DaySection: React.FC<DaySectionProps> = ({
   onDeleteDay,
   onDeleteMedia,
 }) => {
-  const { ref, inView } = useInView({
+  const [hasAnimated, setHasAnimated] = useState(false);
+  const { ref } = useInView({
     rootMargin: '-10% 0px -30% 0px',
-    triggerOnce: true, // Only animate in once
     onChange: (visible) => {
       if (visible) {
+        setHasAnimated(true);
         onVisible(day.id);
       }
     },
@@ -41,6 +45,29 @@ const DaySection: React.FC<DaySectionProps> = ({
 
   const { media, loading: mediaLoading, error: mediaError } = useMedia(day.id);
   const { counts: commentCounts } = useDayCommentCounts(day.id);
+
+  // Smart Preload Queue for Active Day
+  React.useEffect(() => {
+    let cancel = false;
+
+    const runQueue = async () => {
+      if (!isActive || !media.length) return;
+
+      for (const item of media) {
+        if (cancel) break;
+        if (item.type === 'photo') {
+          // Preload one image at a time, wait for it to finish gracefully
+          await preloadImageUrl(item.url).catch(() => undefined);
+        }
+      }
+    };
+
+    runQueue();
+
+    return () => {
+      cancel = true;
+    };
+  }, [isActive, media]);
 
   const [isEditingText, setIsEditingText] = useState(false);
   const [draftText, setDraftText] = useState(day.description || '');
@@ -84,7 +111,7 @@ const DaySection: React.FC<DaySectionProps> = ({
       ref={ref} 
       id={`day-${day.id}`}
       initial={{ opacity: 0, y: 30 }}
-      animate={inView ? { opacity: 1, y: 0 } : {}}
+      animate={hasAnimated ? { opacity: 1, y: 0 } : {}}
       transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
     >
       {!mediaLoading && media.length > 0 && <div className="timeline-dot" />}
