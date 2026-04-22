@@ -59,10 +59,12 @@ const EmaBoard: React.FC<EmaBoardProps> = ({ dayId }) => {
 
   const getFontSize = (text: string) => {
     const length = text.length;
-    if (length < 20) return '0.85rem';
-    if (length < 40) return '0.75rem';
-    if (length < 60) return '0.65rem';
-    return '0.55rem';
+    if (length < 15) return '0.9rem';
+    if (length < 30) return '0.75rem';
+    if (length < 45) return '0.6rem';
+    if (length < 60) return '0.5rem';
+    if (length < 75) return '0.45rem';
+    return '0.4rem';
   };
 
   return (
@@ -218,9 +220,20 @@ const EmaBoard: React.FC<EmaBoardProps> = ({ dayId }) => {
         .ema-rack {
           display: flex;
           flex-wrap: wrap;
-          gap: 1.5rem;
+          gap: 2.5rem 1.5rem;
           justify-content: center;
-          padding: 1rem;
+          padding: 3rem 1rem;
+          position: relative;
+          background-image: linear-gradient(
+            to bottom,
+            transparent 0,
+            transparent 2.2rem,
+            #5d2e0d 2.2rem,
+            #3e1f08 2.8rem,
+            transparent 2.8rem
+          );
+          background-size: 100% 230px; /* Matches row height + vertical gap */
+          background-repeat: repeat-y;
         }
 
         .ema-card {
@@ -237,7 +250,8 @@ const EmaBoard: React.FC<EmaBoardProps> = ({ dayId }) => {
           cursor: default;
           transform-origin: top center;
           filter: drop-shadow(0 4px 10px rgba(0,0,0,0.12));
-          padding: 0; /* Content handled by absolute positioning */
+          padding: 0; 
+          z-index: 1;
         }
 
         .ema-content {
@@ -261,13 +275,16 @@ const EmaBoard: React.FC<EmaBoardProps> = ({ dayId }) => {
           color: #4a3423;
           line-height: 1.2;
           margin-bottom: 0.3rem;
-          overflow-wrap: break-word;
+          overflow-wrap: anywhere;
+          word-break: break-all;
           max-width: 100%;
-          max-height: 3.6em; 
+          height: 3.8em; 
           overflow: hidden;
           display: -webkit-box;
           -webkit-line-clamp: 3;
           -webkit-box-orient: vertical;
+          padding: 0 8px;
+          font-weight: 600; /* Bolder for readability at tiny sizes */
         }
 
         .ema-author {
@@ -433,33 +450,63 @@ const EmaBoard: React.FC<EmaBoardProps> = ({ dayId }) => {
 
         @media (max-width: 640px) {
           .ema-rack {
-            gap: 1.5rem 0.5rem;
-            flex-direction: row;
-            flex-wrap: wrap;
-            justify-content: center;
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 4rem 0.65rem; 
+            justify-items: center;
+            padding: 2.2rem 0.5rem;
+            background-image: linear-gradient(
+              to bottom,
+              transparent 0,
+              transparent 1.5rem,
+              #5d2e0d 1.5rem,
+              #3e1f08 2rem,
+              transparent 2rem
+            );
+            background-size: 100% calc(4rem + (170px * 195/240));
           }
+
           .ema-card {
-            width: 165px;
-            height: 134px;
+            width: 100%;
+            height: auto;
+            aspect-ratio: 240 / 195;
+            max-width: 170px;
+          }
+          .ema-content {
+            width: 90%;
+            top: 60%;
           }
           .ema-emoji {
-            font-size: 1rem;
+            font-size: clamp(0.7rem, 4vw, 1.1rem);
+            margin-bottom: 0.1rem;
           }
           .ema-text {
-            font-size: 0.55rem !important; /* Force smaller size on mini-cards */
             line-height: 1.1;
+            height: 3.3em;
+            margin-bottom: 0.2rem;
+            -webkit-line-clamp: 3;
+            padding: 0 4px;
           }
           .ema-author {
-            font-size: 0.45rem;
+            font-size: clamp(0.45rem, 2.2vw, 0.6rem);
           }
           .emoji-grid {
             grid-template-columns: repeat(4, 1fr);
           }
           .ema-add-content {
-            margin-top: 1.5rem;
+            margin-top: 0;
+            top: 55%;
+            left: 50%;
+            width: 100%;
+            transform: translate(-50%, -50%);
+            gap: 0.3rem;
+          }
+          .ema-add-content svg {
+            width: 20px;
+            height: 20px;
           }
           .ema-add-content span {
-            font-size: 0.7rem;
+            font-size: 0.65rem;
           }
         }
       `}</style>
