@@ -1,5 +1,7 @@
 {
   "projects": {
-    "default": "japan-resa-2026"
-  }
+    "default": "quotegenerator-d35ad"
+  },
+  "targets": {},
+  "etags": {}
 }

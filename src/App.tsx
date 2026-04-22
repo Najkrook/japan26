@@ -55,6 +55,20 @@ function App() {
     setTheme(prev => prev === 'light' ? 'dark' : 'light');
   }, []);
 
+  // Tab Hibernation Effect
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        document.title = 'Minnen från Japan... 🌸';
+      } else {
+        document.title = 'Jojje i Japan ⛩️';
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, []);
+
   // Animated scroll progress for the timeline
   const { scrollYProgress } = useScroll();
 

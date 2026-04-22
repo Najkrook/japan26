@@ -33,7 +33,7 @@ const Header: React.FC<HeaderProps> = ({
         </div>
 
         <div className="logo-text">
-          <h1>Japan <span>Journal</span></h1>
+          <h1>Jojje <span>i Japan</span></h1>
         </div>
 
         <div className="header-right">
