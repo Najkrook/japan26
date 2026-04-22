@@ -1,6 +1,12 @@
 @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Noto+Serif:ital,wght@0,400;0,700;1,400;1,700&family=Space+Grotesk:wght@400;500;600;700&family=Kalam:wght@400;700&family=Zen+Kurenaido&display=swap');
 @import 'leaflet/dist/leaflet.css';
 
+html, body {
+  width: 100%;
+  overflow-x: hidden;
+  position: relative;
+}
+
 :root {
   /* Common System Scales */
   --radius-sm: 14px;

@@ -433,25 +433,33 @@ const EmaBoard: React.FC<EmaBoardProps> = ({ dayId }) => {
 
         @media (max-width: 640px) {
           .ema-rack {
-            gap: 2rem; /* More space for hanging look */
-            flex-direction: column;
-            align-items: center;
+            gap: 1.5rem 0.5rem;
+            flex-direction: row;
+            flex-wrap: wrap;
+            justify-content: center;
           }
           .ema-card {
-            width: 200px;
-            height: 162px;
+            width: 165px;
+            height: 134px;
           }
           .ema-emoji {
-            font-size: 1.2rem;
+            font-size: 1rem;
+          }
+          .ema-text {
+            font-size: 0.55rem !important; /* Force smaller size on mini-cards */
+            line-height: 1.1;
           }
           .ema-author {
-            font-size: 0.55rem;
+            font-size: 0.45rem;
           }
           .emoji-grid {
             grid-template-columns: repeat(4, 1fr);
           }
           .ema-add-content {
-            margin-top: 2.5rem;
+            margin-top: 1.5rem;
+          }
+          .ema-add-content span {
+            font-size: 0.7rem;
           }
         }
       `}</style>

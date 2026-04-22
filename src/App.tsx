@@ -434,6 +434,8 @@ function App() {
           display: flex;
           flex-direction: column;
           align-items: center;
+          overflow: hidden; /* Prevent huge kanji from causing overflow */
+          width: 100%;
         }
 
         .hero-title-main {
