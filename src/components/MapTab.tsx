@@ -7,6 +7,7 @@ import iconShadow from 'leaflet/dist/images/marker-shadow.png';
 import { useAllMedia } from '../hooks/useAllMedia';
 import type { Media } from '../types';
 import { formatDateSwedish } from '../utils/dateHelpers';
+import { preloadImageUrl } from '../utils/imagePreload';
 import { DEFAULT_MAP_CENTER, getMapBounds, getMapMedia, type MapBounds } from '../utils/mapMedia';
 
 const DefaultIcon = L.icon({
@@ -87,7 +88,15 @@ const MapTab: React.FC<MapTabProps> = ({ onMediaOpen }) => {
             />
 
             {mapMedia.map((item, index) => (
-              <Marker key={item.id} position={[item.latitude!, item.longitude!]}>
+              <Marker 
+                key={item.id} 
+                position={[item.latitude!, item.longitude!]}
+                eventHandlers={{
+                  mouseover: () => {
+                    preloadImageUrl(item.thumbnailUrl || item.url).catch(() => undefined);
+                  }
+                }}
+              >
                 <Popup className="media-popup">
                   <div className="popup-content">
                     <img

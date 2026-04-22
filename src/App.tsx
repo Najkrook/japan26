@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
 import { AnimatePresence, motion, useScroll, useSpring } from 'framer-motion';
 import { Image as ImageIcon, Loader2, X } from 'lucide-react';
 import AdminLogin from './components/AdminLogin';
@@ -55,6 +55,14 @@ function App() {
   const prevMediaItem =
     selectedMediaIndex !== null ? lightboxMedia[selectedMediaIndex - 1] ?? null : null;
 
+  // Cache the last selected media so the Lightbox stays mounted with the correct image when closed
+  const [lastSelectedMedia, setLastSelectedMedia] = useState<Media | null>(null);
+  useEffect(() => {
+    if (selectedMedia) {
+      setLastSelectedMedia(selectedMedia);
+    }
+  }, [selectedMedia]);
+
   const handleDayVisible = useCallback((dayId: string) => {
     setActiveDayId(dayId);
   }, []);
@@ -109,9 +117,11 @@ function App() {
         onLoginClick={() => setShowAdminLogin(true)}
       />
 
-      {activeTab === 'map' ? (
+      <div style={{ display: activeTab === 'map' ? 'block' : 'none', height: '100%' }}>
         <MapTab onMediaOpen={handleOpenLightbox} />
-      ) : (
+      </div>
+      
+      <div style={{ display: activeTab === 'journal' ? 'block' : 'none' }}>
         <main
           className="main-content"
           aria-label={welcomeLabel}
@@ -170,8 +180,8 @@ function App() {
             style={{ scaleY, transformOrigin: 'top' }}
           />
           {daysLoading ? (
-            <div className="loading-state">
-              <Loader2 className="spinner" size={32} />
+            <div className="ethereal-loading-state fade-in">
+              <div className="sakura-spinner">🌸</div>
               <p>Hämtar tidslinjen...</p>
             </div>
           ) : days.length > 0 ? (
@@ -202,19 +212,31 @@ function App() {
           )}
         </section>
       </main>
-      )}
+      </div>
 
       <BottomNav activeTab={activeTab} onTabChange={setActiveTab} />
 
-      <AnimatePresence>
-        {selectedMedia && (
+      <div 
+        aria-hidden={!selectedMedia}
+        style={{
+          position: 'fixed',
+          inset: 0,
+          zIndex: 3000,
+          opacity: selectedMedia ? 1 : 0,
+          visibility: selectedMedia ? 'visible' : 'hidden',
+          pointerEvents: selectedMedia ? 'auto' : 'none',
+          transition: 'opacity 0.3s cubic-bezier(0.16, 1, 0.3, 1), visibility 0.3s'
+        }}
+      >
+        {lastSelectedMedia && (
           <Lightbox
-            item={selectedMedia}
+            item={selectedMedia || lastSelectedMedia}
             nextItem={nextMediaItem ?? undefined}
             prevItem={prevMediaItem ?? undefined}
             mediaIndex={selectedMediaIndex ?? 0}
             mediaCount={lightboxMedia.length}
             userName={userName || 'Besökare'}
+            isOpen={!!selectedMedia}
             onClose={() => setSelectedMediaIndex(null)}
             onNext={
               selectedMediaIndex !== null && selectedMediaIndex < lightboxMedia.length - 1
@@ -228,7 +250,7 @@ function App() {
             }
           />
         )}
-      </AnimatePresence>
+      </div>
 
       <AnimatePresence>
         {showAdminLogin && (
@@ -366,6 +388,41 @@ function App() {
             max-width: 90%;
             font-size: 1.05rem;
           }
+        }
+
+        .ethereal-loading-state {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          padding: 6rem 2rem;
+          gap: 1.5rem;
+        }
+
+        .sakura-spinner {
+          font-size: 2.5rem;
+          animation: sakura-spin 3s ease-in-out infinite;
+          filter: drop-shadow(0 0 12px rgba(188, 0, 45, 0.3));
+        }
+
+        @keyframes sakura-spin {
+          0% { transform: rotate(0deg) scale(1); }
+          50% { transform: rotate(180deg) scale(1.1); }
+          100% { transform: rotate(360deg) scale(1); }
+        }
+
+        .ethereal-loading-state p {
+          font-family: var(--font-heading);
+          font-size: 1.25rem;
+          color: var(--primary);
+          letter-spacing: 0.05em;
+          font-style: italic;
+          animation: pulse-opacity 2s ease-in-out infinite;
+        }
+
+        @keyframes pulse-opacity {
+          0%, 100% { opacity: 0.5; }
+          50% { opacity: 1; }
         }
       `}</style>
     </div>

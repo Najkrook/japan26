@@ -3,6 +3,8 @@ import { motion } from 'framer-motion';
 import { MessageCircle, Play, X } from 'lucide-react';
 import type { Media } from '../types';
 
+import { preloadImageUrl } from '../utils/imagePreload';
+
 interface MediaItemProps {
   item: Media;
   isAdmin?: boolean;
@@ -19,6 +21,12 @@ const MediaItem: React.FC<MediaItemProps> = ({ item, isAdmin, commentCount, onCl
     }
   };
 
+  const handlePreload = () => {
+    if (item.type === 'photo') {
+      preloadImageUrl(item.url).catch(() => undefined);
+    }
+  };
+
   return (
     <motion.button
       type="button"
@@ -28,6 +36,8 @@ const MediaItem: React.FC<MediaItemProps> = ({ item, isAdmin, commentCount, onCl
       animate={{ opacity: 1, y: 0 }}
       whileHover={{ y: -5 }}
       onClick={onClick}
+      onMouseEnter={handlePreload}
+      onTouchStart={handlePreload}
     >
       <div className="media-preview-wrapper">
         <img

@@ -22,6 +22,7 @@ interface LightboxProps {
   mediaIndex: number;
   mediaCount: number;
   userName: string;
+  isOpen?: boolean;
   onClose: () => void;
   onNext?: () => void;
   onPrev?: () => void;
@@ -207,6 +208,7 @@ const Lightbox: React.FC<LightboxProps> = ({
   mediaIndex,
   mediaCount,
   userName,
+  isOpen = true,
   onClose,
   onNext,
   onPrev,
@@ -300,6 +302,10 @@ const Lightbox: React.FC<LightboxProps> = ({
   }, [dismissGestureHint]);
 
   React.useEffect(() => {
+    if (!isOpen) {
+      return undefined;
+    }
+
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         onClose();
@@ -317,7 +323,7 @@ const Lightbox: React.FC<LightboxProps> = ({
       unlockBodyScroll();
       window.removeEventListener('keydown', onKeyDown);
     };
-  }, [onClose, onNext, onPrev]);
+  }, [isOpen, onClose, onNext, onPrev]);
 
   React.useEffect(() => {
     if (!isMobileLayout) {
