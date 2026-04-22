@@ -8,7 +8,7 @@ import { useAllMedia } from '../hooks/useAllMedia';
 import type { Media } from '../types';
 import { formatDateSwedish } from '../utils/dateHelpers';
 import { preloadImageUrl } from '../utils/imagePreload';
-import { DEFAULT_MAP_CENTER, getMapBounds, getJourneyPath, type DayStop, type MapBounds } from '../utils/mapMedia';
+import { DEFAULT_MAP_CENTER, getMapBounds, getJourneyPath, type MapBounds } from '../utils/mapMedia';
 import { createHankoIcon } from './HankoMarker';
 
 const DefaultIcon = L.icon({
@@ -83,7 +83,7 @@ const MapTab: React.FC<MapTabProps> = ({ isActive = true, onMediaOpen }) => {
             <TriangleAlert size={28} />
             <p>{error}</p>
           </div>
-        ) : mapMedia.length === 0 ? (
+        ) : journeyStops.length === 0 ? (
           <div className="empty-state map-state" data-testid="map-empty-state">
             <MapPin size={32} />
             <h3>{hasAnyMedia ? 'Ingen platsdata hittades' : 'Ingen media \u00e4n'}</h3>
