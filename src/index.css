@@ -233,21 +233,25 @@ button {
 
 @media (max-width: 768px) {
   .main-content {
-    padding: 1rem 0.5rem 8rem;
+    padding: 1rem 0 8rem;
   }
-  
+
+  .content-container {
+    padding: 0 0.5rem;
+  }
+
   .timeline-track,
-  .timeline-fill {
-    left: 1rem;
-  }
-  
-  .journal-card {
-    margin-left: 2rem;
-    padding: 1.5rem;
-  }
-  
+  .timeline-fill,
   .timeline-dot {
-    left: calc(1rem - 6px);
-    top: 2.5rem;
+    display: none;
+  }
+
+  .journal-card {
+    margin-left: 0;
+    padding: 1.4rem;
+  }
+
+  .timeline-section {
+    margin-top: 2.5rem;
   }
 }

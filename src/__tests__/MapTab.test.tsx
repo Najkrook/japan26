@@ -6,6 +6,12 @@ import type { Media } from '../types';
 
 const mockUseAllMedia = vi.fn();
 const mockFitBounds = vi.fn();
+const mockInvalidateSize = vi.fn();
+const mockGetZoom = vi.fn(() => 6);
+const mockProject = vi.fn(([lat, lng]: [number, number], zoom: number) => ({
+  x: lng * zoom * 100,
+  y: lat * zoom * 100,
+}));
 
 vi.mock('../hooks/useAllMedia', () => ({
   useAllMedia: (...args: unknown[]) => mockUseAllMedia(...args),
@@ -13,7 +19,8 @@ vi.mock('../hooks/useAllMedia', () => ({
 
 vi.mock('leaflet', () => ({
   default: {
-    icon: vi.fn(() => ({})),
+    icon: vi.fn((options?: unknown) => options ?? {}),
+    divIcon: vi.fn((options?: unknown) => options ?? {}),
     Marker: {
       prototype: {
         options: {},
@@ -27,14 +34,38 @@ vi.mock('react-leaflet', () => ({
     <div data-testid="mock-map-container">{children}</div>
   ),
   TileLayer: () => null,
-  Marker: ({ children }: { children: React.ReactNode }) => (
-    <div data-testid="mock-map-marker">{children}</div>
+  Polyline: () => <div data-testid="mock-map-polyline" />,
+  Marker: ({
+    children,
+    icon,
+  }: {
+    children?: React.ReactNode;
+    icon?: { className?: string };
+  }) => (
+    <div
+      data-testid={
+        icon?.className?.includes('hanko-cluster-container')
+          ? 'mock-map-cluster-marker'
+          : 'mock-map-stop-marker'
+      }
+    >
+      {children}
+    </div>
   ),
   Popup: ({ children }: { children: React.ReactNode }) => (
     <div data-testid="mock-map-popup">{children}</div>
   ),
   useMap: () => ({
     fitBounds: mockFitBounds,
+    invalidateSize: mockInvalidateSize,
+    getZoom: mockGetZoom,
+    project: mockProject,
+  }),
+  useMapEvents: () => ({
+    fitBounds: mockFitBounds,
+    invalidateSize: mockInvalidateSize,
+    getZoom: mockGetZoom,
+    project: mockProject,
   }),
 }));
 
@@ -81,8 +112,40 @@ const geoMedia: Media[] = [
   },
 ];
 
+const clusteredMedia: Media[] = [
+  {
+    ...geoMedia[0],
+    id: 'cluster-1',
+    dayId: 'cluster-day-1',
+    latitude: 35.6801,
+    longitude: 139.7601,
+  },
+  {
+    ...geoMedia[1],
+    id: 'cluster-2',
+    dayId: 'cluster-day-2',
+    latitude: 35.6802,
+    longitude: 139.7602,
+  },
+  {
+    ...geoMedia[1],
+    id: 'cluster-3',
+    dayId: 'cluster-day-3',
+    latitude: 34.69,
+    longitude: 135.5,
+  },
+];
+
 beforeEach(() => {
   mockFitBounds.mockReset();
+  mockInvalidateSize.mockReset();
+  mockGetZoom.mockReset();
+  mockProject.mockReset();
+  mockGetZoom.mockReturnValue(6);
+  mockProject.mockImplementation(([lat, lng]: [number, number], zoom: number) => ({
+    x: lng * zoom * 100,
+    y: lat * zoom * 100,
+  }));
   mockUseAllMedia.mockReset();
 });
 
@@ -107,15 +170,15 @@ describe('MapTab', () => {
     mockUseAllMedia.mockReturnValue({
       media: [],
       loading: false,
-      error: 'Kunde inte hÃ¤mta media fÃ¶r kartan.',
+      error: 'Kunde inte hÃƒÂ¤mta media fÃƒÂ¶r kartan.',
     });
 
     render(<MapTab />);
 
-    expect(screen.getByTestId('map-error-state').textContent).toContain('Kunde inte hÃ¤mta media fÃ¶r kartan.');
+    expect(screen.getByTestId('map-error-state').textContent).toContain('Kunde inte hÃƒÂ¤mta media fÃƒÂ¶r kartan.');
   });
 
-  it('fits the map to all geo-tagged markers and filters out media without coordinates', () => {
+  it('fits the map to all geo-tagged day stops and filters out media without coordinates', () => {
     mockUseAllMedia.mockReturnValue({
       media: geoMedia,
       loading: false,
@@ -124,7 +187,7 @@ describe('MapTab', () => {
 
     render(<MapTab />);
 
-    expect(screen.getAllByTestId('mock-map-marker')).toHaveLength(2);
+    expect(screen.getAllByTestId('mock-map-stop-marker')).toHaveLength(2);
     expect(mockFitBounds).toHaveBeenCalledWith(
       [
         [34.69, 135.5],
@@ -134,7 +197,20 @@ describe('MapTab', () => {
     );
   });
 
-  it('opens the selected media through the popup button callback', () => {
+  it('renders a cluster marker when nearby day stops collapse at low zoom', () => {
+    mockUseAllMedia.mockReturnValue({
+      media: clusteredMedia,
+      loading: false,
+      error: null,
+    });
+
+    render(<MapTab />);
+
+    expect(screen.getAllByTestId('mock-map-cluster-marker')).toHaveLength(1);
+    expect(screen.getAllByTestId('mock-map-stop-marker')).toHaveLength(1);
+  });
+
+  it('opens the selected day media through the popup button callback', () => {
     mockUseAllMedia.mockReturnValue({
       media: geoMedia,
       loading: false,
@@ -147,9 +223,6 @@ describe('MapTab', () => {
 
     fireEvent.click(screen.getByTestId('map-open-media-media-2'));
 
-    expect(onMediaOpen).toHaveBeenCalledWith(
-      [geoMedia[0], geoMedia[1]],
-      1,
-    );
+    expect(onMediaOpen).toHaveBeenCalledWith([geoMedia[1]], 0);
   });
 });

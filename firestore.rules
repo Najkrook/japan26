@@ -51,7 +51,7 @@ service cloud.firestore {
     match /comments/{commentId} {
       allow read: if true;
       allow create: if true;
-      allow update, delete: if false;
+      allow update, delete: if isAdmin();
     }
   }
 }

@@ -202,7 +202,7 @@ function App() {
             </motion.div>
             <p className="hero-tagline">Följ äventyret i Japan 🌸🗾🍙</p>
             <p className="hero-description-small">
-              「日本語がめちゃくちゃ上手なのか、それとも翻訳ツールの使い方を知ってるのか、どっちにしても盛大な拍手ものです！<br />
+              「日本語がめちゃくちゃ上手なのか、それとも翻訳ツールの使い方を知ってるのか、<br />どっちにしても盛大な拍手ものです！<br />
               頭いいってわかるように、ドヤ顔の絵文字を送ってね ;)」
             </p>
           </motion.div>

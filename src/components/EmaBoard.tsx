@@ -10,14 +10,13 @@ interface EmaBoardProps {
   dayId: string;
 }
 
-const EMOJI_OPTIONS = ['🌸', '⛩️', '🍡', '🏔️', '🧸', '🍜', '🍣', '🎏', '🎋', '🦊', '🍵', '🏮'];
+const EMOJI_OPTIONS = ['🌸', '⛩️', '🏠', '🏔️', '🧸', '🍜', '🍣', '🎁', '🍶', '🦊', '🍵', '🎐'];
 
 const EmaBoard: React.FC<EmaBoardProps> = ({ dayId }) => {
   const { isAdmin } = useAdmin();
   const boardId = `ema-board-${dayId}`;
-  
   const { comments: emas, addComment } = useComments(boardId);
-  
+
   const [isDrafting, setIsDrafting] = useState(false);
   const [draftName, setDraftName] = useState('');
   const [draftText, setDraftText] = useState('');
@@ -59,13 +58,35 @@ const EmaBoard: React.FC<EmaBoardProps> = ({ dayId }) => {
 
   const getFontSize = (text: string) => {
     const length = text.length;
-    if (length < 15) return '0.9rem';
-    if (length < 30) return '0.75rem';
-    if (length < 45) return '0.6rem';
-    if (length < 60) return '0.5rem';
-    if (length < 75) return '0.45rem';
-    return '0.4rem';
+    if (length < 16) return '0.94rem';
+    if (length < 30) return '0.82rem';
+    if (length < 45) return '0.74rem';
+    if (length < 60) return '0.7rem';
+    if (length < 75) return '0.64rem';
+    return '0.6rem';
   };
+
+  type RackItem = { type: 'ema'; ema: (typeof emas)[number] } | { type: 'add' };
+
+  const rackItems = React.useMemo<RackItem[]>(() => {
+    const items: RackItem[] = emas.map((ema) => ({ type: 'ema', ema }));
+
+    if (!isDrafting) {
+      items.push({ type: 'add' });
+    }
+
+    return items;
+  }, [emas, isDrafting]);
+
+  const emaRows = React.useMemo(() => {
+    const rows: RackItem[][] = [];
+
+    for (let index = 0; index < rackItems.length; index += 2) {
+      rows.push(rackItems.slice(index, index + 2));
+    }
+
+    return rows;
+  }, [rackItems]);
 
   return (
     <div className="ema-board-section">
@@ -75,54 +96,63 @@ const EmaBoard: React.FC<EmaBoardProps> = ({ dayId }) => {
       </div>
 
       <div className="ema-rack">
-        <AnimatePresence>
-          {emas.map((ema) => (
-            <motion.div
-              key={ema.id}
-              className="ema-card"
-              initial={{ opacity: 0, y: -20, rotate: -5 }}
-              animate={{ opacity: 1, y: 0, rotate: 0 }}
-              exit={{ opacity: 0, scale: 0.8 }}
-              whileHover={{ rotate: [-2, 2, -1, 1, 0], transition: { duration: 0.8 } }}
-            >
-              {isAdmin && (
-                <button
-                  className="ema-delete"
-                  onClick={() => handleDelete(ema.id)}
-                  title="Ta bort Ema"
-                  type="button"
-                >
-                  <Trash2 size={14} />
-                </button>
-              )}
-              <div className="ema-content">
-                <div className="ema-emoji">{ema.emoji || '🌸'}</div>
-                <div 
-                  className="ema-text" 
-                  style={{ fontSize: getFontSize(ema.text) }}
-                >
-                  "{ema.text}"
-                </div>
-                <div className="ema-author">- {ema.author}</div>
-              </div>
-            </motion.div>
-          ))}
-        </AnimatePresence>
-
-        {!isDrafting && (
-          <motion.div
-            className="ema-card ema-add-card"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            onClick={() => setIsDrafting(true)}
-            whileHover={{ scale: 1.05 }}
+        {emaRows.map((row, rowIndex) => (
+          <div
+            key={`ema-row-${rowIndex}`}
+            className={`ema-row ${row.length === 1 ? 'single-card' : ''}`}
           >
-            <div className="ema-content ema-add-content">
-              <Plus size={32} />
-              <span>Häng Ema</span>
+            <div className="ema-rail" aria-hidden="true" />
+            <div className="ema-row-cards">
+              <AnimatePresence initial={false}>
+                {row.map((item) =>
+                  item.type === 'ema' ? (
+                    <motion.div
+                      key={item.ema.id}
+                      className="ema-card"
+                      initial={{ opacity: 0, y: -20, rotate: -5 }}
+                      animate={{ opacity: 1, y: 0, rotate: 0 }}
+                      exit={{ opacity: 0, scale: 0.8 }}
+                      whileHover={{ rotate: [-2, 2, -1, 1, 0], transition: { duration: 0.8 } }}
+                    >
+                      {isAdmin && (
+                        <button
+                          className="ema-delete"
+                          onClick={() => handleDelete(item.ema.id)}
+                          title="Ta bort Ema"
+                          type="button"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      )}
+                      <div className="ema-content">
+                        <div className="ema-emoji">{item.ema.emoji || '🌸'}</div>
+                        <div className="ema-text" style={{ fontSize: getFontSize(item.ema.text) }}>
+                          "{item.ema.text}"
+                        </div>
+                        <div className="ema-author">- {item.ema.author}</div>
+                      </div>
+                    </motion.div>
+                  ) : (
+                    <motion.button
+                      key="ema-add-card"
+                      className="ema-card ema-add-card"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      onClick={() => setIsDrafting(true)}
+                      type="button"
+                      whileHover={{ scale: 1.05 }}
+                    >
+                      <div className="ema-content ema-add-content">
+                        <Plus size={32} />
+                        <span>Häng Ema</span>
+                      </div>
+                    </motion.button>
+                  )
+                )}
+              </AnimatePresence>
             </div>
-          </motion.div>
-        )}
+          </div>
+        ))}
       </div>
 
       <AnimatePresence>
@@ -140,7 +170,7 @@ const EmaBoard: React.FC<EmaBoardProps> = ({ dayId }) => {
                 <X size={20} />
               </button>
             </div>
-            
+
             <div className="ema-emoji-picker">
               <label>Välj en symbol:</label>
               <div className="emoji-grid">
@@ -218,28 +248,82 @@ const EmaBoard: React.FC<EmaBoardProps> = ({ dayId }) => {
         }
 
         .ema-rack {
+          --ema-card-width: 240px;
+          --ema-card-height: 195px;
+          --ema-row-gap: 2.35rem;
+          --ema-column-gap: 1.5rem;
+          --ema-hang-gap: 0.28rem;
           display: flex;
-          flex-wrap: wrap;
-          gap: 2.5rem 1.5rem;
-          justify-content: center;
-          padding: 3rem 1rem;
+          flex-direction: column;
+          gap: var(--ema-row-gap);
+          padding: 1.85rem 0.75rem 0.6rem;
+        }
+
+        .ema-row {
+          display: flex;
+          flex-direction: column;
+          gap: var(--ema-hang-gap);
+        }
+
+        .ema-rail {
           position: relative;
-          background-image: linear-gradient(
-            to bottom,
-            transparent 0,
-            transparent 2.2rem,
-            #5d2e0d 2.2rem,
-            #3e1f08 2.8rem,
-            transparent 2.8rem
-          );
-          background-size: 100% 230px; /* Matches row height + vertical gap */
-          background-repeat: repeat-y;
+          width: calc(100% - 0.9rem);
+          height: 0.72rem;
+          margin: 0 auto;
+          border-radius: 999px;
+          background:
+            linear-gradient(
+              to bottom,
+              rgba(255, 244, 223, 0.55) 0,
+              rgba(255, 244, 223, 0.18) 18%,
+              #74401a 18%,
+              #9c6230 44%,
+              #74401a 69%,
+              #4b2207 100%
+            );
+          box-shadow:
+            inset 0 1px 0 rgba(255, 255, 255, 0.32),
+            inset 0 -1px 0 rgba(62, 28, 8, 0.38),
+            0 2px 6px rgba(70, 34, 12, 0.18);
+        }
+
+        .ema-rail::before,
+        .ema-rail::after {
+          content: '';
+          position: absolute;
+          top: 50%;
+          width: 4px;
+          height: 4px;
+          border-radius: 50%;
+          transform: translateY(-50%);
+          background: rgba(69, 30, 8, 0.82);
+          box-shadow: 0 0 0 1px rgba(147, 98, 48, 0.35);
+        }
+
+        .ema-rail::before {
+          left: 1rem;
+        }
+
+        .ema-rail::after {
+          right: 1rem;
+        }
+
+        .ema-row-cards {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, var(--ema-card-width)));
+          justify-content: center;
+          column-gap: var(--ema-column-gap);
+          align-items: start;
+        }
+
+        .ema-row.single-card .ema-row-cards {
+          grid-template-columns: minmax(0, var(--ema-card-width));
         }
 
         .ema-card {
           position: relative;
-          width: 240px;
-          height: 195px;
+          width: var(--ema-card-width);
+          height: var(--ema-card-height);
           background: url('/ema-plaque.png') no-repeat center center;
           background-size: contain;
           display: flex;
@@ -250,16 +334,16 @@ const EmaBoard: React.FC<EmaBoardProps> = ({ dayId }) => {
           cursor: default;
           transform-origin: top center;
           filter: drop-shadow(0 4px 10px rgba(0,0,0,0.12));
-          padding: 0; 
+          padding: 0;
           z-index: 1;
         }
 
         .ema-content {
           position: absolute;
-          top: 55%; /* Centered in the wooden flat part */
+          top: 57%;
           left: 50%;
           transform: translate(-50%, -50%);
-          width: 65%; /* Slightly narrower for safer margins */
+          width: 69%;
           display: flex;
           flex-direction: column;
           align-items: center;
@@ -273,22 +357,22 @@ const EmaBoard: React.FC<EmaBoardProps> = ({ dayId }) => {
         .ema-text {
           font-family: var(--font-mono);
           color: #4a3423;
-          line-height: 1.2;
-          margin-bottom: 0.3rem;
+          line-height: 1.15;
+          margin-bottom: 0.35rem;
           overflow-wrap: anywhere;
-          word-break: break-all;
+          word-break: normal;
           max-width: 100%;
-          height: 3.8em; 
+          height: 3.45em;
           overflow: hidden;
           display: -webkit-box;
           -webkit-line-clamp: 3;
           -webkit-box-orient: vertical;
-          padding: 0 8px;
-          font-weight: 600; /* Bolder for readability at tiny sizes */
+          padding: 0 6px;
+          font-weight: 600;
         }
 
         .ema-author {
-          font-size: 0.6rem;
+          font-size: 0.62rem;
           font-weight: 700;
           color: #5d2e0d;
           text-transform: uppercase;
@@ -323,6 +407,7 @@ const EmaBoard: React.FC<EmaBoardProps> = ({ dayId }) => {
         }
 
         .ema-add-card {
+          border: none;
           background-color: transparent;
           cursor: pointer;
           filter: sepia(0.5) opacity(0.7);
@@ -334,7 +419,9 @@ const EmaBoard: React.FC<EmaBoardProps> = ({ dayId }) => {
           flex-direction: column;
           align-items: center;
           gap: 0.4rem;
-          margin-top: 2rem;
+          margin-top: 0;
+          top: 58%;
+          width: 72%;
         }
 
         .ema-add-content span {
@@ -342,7 +429,6 @@ const EmaBoard: React.FC<EmaBoardProps> = ({ dayId }) => {
           font-weight: 600;
         }
 
-        /* Draft Form */
         .ema-draft-form {
           max-width: 500px;
           margin: 2rem auto;
@@ -450,63 +536,117 @@ const EmaBoard: React.FC<EmaBoardProps> = ({ dayId }) => {
 
         @media (max-width: 640px) {
           .ema-rack {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 4rem 0.65rem; 
-            justify-items: center;
-            padding: 2.2rem 0.5rem;
-            background-image: linear-gradient(
-              to bottom,
-              transparent 0,
-              transparent 1.5rem,
-              #5d2e0d 1.5rem,
-              #3e1f08 2rem,
-              transparent 2rem
-            );
-            background-size: 100% calc(4rem + (170px * 195/240));
+            --ema-card-width: 100%;
+            --ema-card-height: 154px;
+            --ema-row-gap: 1.75rem;
+            --ema-column-gap: 0.45rem;
+            --ema-hang-gap: 0.16rem;
+            padding: 1.15rem 0 0.3rem;
+          }
+
+          .ema-rail {
+            width: 100%;
+            height: 0.62rem;
+          }
+
+          .ema-rail::before {
+            left: 0.75rem;
+          }
+
+          .ema-rail::after {
+            right: 0.75rem;
+          }
+
+          .ema-row-cards {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            column-gap: var(--ema-column-gap);
+          }
+
+          .ema-row.single-card .ema-row-cards {
+            grid-template-columns: minmax(0, 1fr);
+          }
+
+          .ema-row.single-card .ema-card {
+            justify-self: center;
+            width: min(100%, 172px);
           }
 
           .ema-card {
             width: 100%;
             height: auto;
             aspect-ratio: 240 / 195;
-            max-width: 170px;
+            max-width: none;
           }
+
           .ema-content {
-            width: 90%;
-            top: 60%;
+            width: 72%;
+            top: 57.5%;
           }
+
           .ema-emoji {
-            font-size: clamp(0.7rem, 4vw, 1.1rem);
-            margin-bottom: 0.1rem;
+            font-size: clamp(0.95rem, 4vw, 1.15rem);
+            margin-bottom: 0.15rem;
           }
+
           .ema-text {
-            line-height: 1.1;
-            height: 3.3em;
-            margin-bottom: 0.2rem;
-            -webkit-line-clamp: 3;
-            padding: 0 4px;
+            line-height: 1.08;
+            height: 3.24em;
+            margin-bottom: 0.18rem;
+            padding: 0 1px;
           }
+
           .ema-author {
-            font-size: clamp(0.45rem, 2.2vw, 0.6rem);
+            font-size: clamp(0.5rem, 1.9vw, 0.62rem);
           }
+
           .emoji-grid {
             grid-template-columns: repeat(4, 1fr);
           }
+
           .ema-add-content {
-            margin-top: 0;
-            top: 55%;
-            left: 50%;
-            width: 100%;
-            transform: translate(-50%, -50%);
-            gap: 0.3rem;
+            top: 57%;
+            width: 74%;
+            gap: 0.28rem;
           }
+
           .ema-add-content svg {
-            width: 20px;
-            height: 20px;
+            width: 18px;
+            height: 18px;
           }
+
           .ema-add-content span {
-            font-size: 0.65rem;
+            font-size: 0.68rem;
+          }
+        }
+
+        @media (max-width: 480px) {
+          .ema-rack {
+            --ema-card-height: 148px;
+            --ema-row-gap: 1.55rem;
+            --ema-column-gap: 0.4rem;
+          }
+
+          .ema-row.single-card .ema-card {
+            width: min(100%, 160px);
+          }
+
+          .ema-content {
+            width: 73%;
+            top: 57%;
+          }
+
+          .ema-text {
+            line-height: 1.06;
+            height: 3.18em;
+          }
+
+          .ema-add-content {
+            width: 75%;
+            top: 56.8%;
+          }
+
+          .ema-add-content span {
+            font-size: 0.64rem;
           }
         }
       `}</style>

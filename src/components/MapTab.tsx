@@ -1,5 +1,5 @@
 import React from 'react';
-import { MapContainer, Marker, Popup, TileLayer, Polyline, useMap } from 'react-leaflet';
+import { MapContainer, Marker, Popup, TileLayer, Polyline, useMap, useMapEvents } from 'react-leaflet';
 import { Image as ImageIcon, Loader2, MapPin, TriangleAlert, Calendar } from 'lucide-react';
 import L from 'leaflet';
 import iconUrl from 'leaflet/dist/images/marker-icon.png';
@@ -8,8 +8,15 @@ import { useAllMedia } from '../hooks/useAllMedia';
 import type { Media } from '../types';
 import { formatDateSwedish } from '../utils/dateHelpers';
 import { preloadImageUrl } from '../utils/imagePreload';
-import { DEFAULT_MAP_CENTER, getMapBounds, getJourneyPath, type MapBounds } from '../utils/mapMedia';
-import { createHankoIcon } from './HankoMarker';
+import {
+  DEFAULT_MAP_CENTER,
+  getMapBounds,
+  getJourneyPath,
+  type DayStop,
+  type MapBounds,
+  type MapCoordinate,
+} from '../utils/mapMedia';
+import { createHankoClusterIcon, createHankoIcon, getHankoClusterSizeTier } from './HankoMarker';
 
 const DefaultIcon = L.icon({
   iconUrl,
@@ -22,6 +29,100 @@ interface MapTabProps {
   isActive?: boolean;
   onMediaOpen?: (media: Media[], index: number) => void;
 }
+
+interface ProjectedPoint {
+  x: number;
+  y: number;
+}
+
+type ClusteredStop =
+  | { type: 'stop'; stop: DayStop; index: number }
+  | { type: 'cluster'; stops: Array<{ stop: DayStop; index: number }>; coordinate: MapCoordinate };
+
+const CLUSTER_DISABLE_ZOOM = 15;
+
+const getMaxClusterRadius = (zoom: number) => {
+  if (zoom >= 14) return 34;
+  if (zoom >= 12) return 44;
+  if (zoom >= 10) return 56;
+  return 72;
+};
+
+const projectDistance = (left: ProjectedPoint, right: ProjectedPoint) =>
+  Math.hypot(left.x - right.x, left.y - right.y);
+
+const averageCoordinate = (stops: Array<{ stop: DayStop }>): MapCoordinate => {
+  const totals = stops.reduce(
+    (acc, item) => {
+      acc.lat += item.stop.coordinate[0];
+      acc.lng += item.stop.coordinate[1];
+      return acc;
+    },
+    { lat: 0, lng: 0 }
+  );
+
+  return [totals.lat / stops.length, totals.lng / stops.length];
+};
+
+const buildClusteredStops = (
+  journeyStops: DayStop[],
+  zoom: number,
+  project: (coordinate: MapCoordinate, zoom: number) => ProjectedPoint
+): ClusteredStop[] => {
+  if (zoom >= CLUSTER_DISABLE_ZOOM) {
+    return journeyStops.map((stop, index) => ({ type: 'stop', stop, index }));
+  }
+
+  const clusterRadius = getMaxClusterRadius(zoom);
+  const projectedStops = journeyStops.map((stop, index) => ({
+    stop,
+    index,
+    projected: project(stop.coordinate, zoom),
+  }));
+  const visited = new Set<number>();
+  const results: ClusteredStop[] = [];
+
+  for (let startIndex = 0; startIndex < projectedStops.length; startIndex += 1) {
+    if (visited.has(startIndex)) continue;
+
+    const queue = [startIndex];
+    const clusterMembers: Array<{ stop: DayStop; index: number }> = [];
+    visited.add(startIndex);
+
+    while (queue.length > 0) {
+      const currentIndex = queue.shift()!;
+      const current = projectedStops[currentIndex];
+      clusterMembers.push({ stop: current.stop, index: current.index });
+
+      for (let candidateIndex = 0; candidateIndex < projectedStops.length; candidateIndex += 1) {
+        if (visited.has(candidateIndex)) continue;
+
+        const candidate = projectedStops[candidateIndex];
+        if (projectDistance(current.projected, candidate.projected) <= clusterRadius) {
+          visited.add(candidateIndex);
+          queue.push(candidateIndex);
+        }
+      }
+    }
+
+    if (clusterMembers.length === 1) {
+      results.push({
+        type: 'stop',
+        stop: clusterMembers[0].stop,
+        index: clusterMembers[0].index,
+      });
+      continue;
+    }
+
+    results.push({
+      type: 'cluster',
+      stops: clusterMembers,
+      coordinate: averageCoordinate(clusterMembers),
+    });
+  }
+
+  return results;
+};
 
 const FitMapToBounds: React.FC<{ bounds: MapBounds | null }> = ({ bounds }) => {
   const map = useMap();
@@ -45,7 +146,6 @@ const MapResizer: React.FC<{ isActive: boolean }> = ({ isActive }) => {
 
   React.useEffect(() => {
     if (isActive) {
-      // Small timeout ensures the DOM has fully rendered the grid before invalidating
       const timeoutId = setTimeout(() => {
         map.invalidateSize();
       }, 50);
@@ -56,11 +156,116 @@ const MapResizer: React.FC<{ isActive: boolean }> = ({ isActive }) => {
   return null;
 };
 
+const JourneyMarkers: React.FC<{
+  journeyStops: DayStop[];
+  onMediaOpen?: (media: Media[], index: number) => void;
+}> = ({ journeyStops, onMediaOpen }) => {
+  const map = useMap();
+  const [zoom, setZoom] = React.useState(() => map.getZoom());
+
+  useMapEvents({
+    zoomend: () => setZoom(map.getZoom()),
+  });
+
+  const clusteredStops = React.useMemo(
+    () => buildClusteredStops(journeyStops, zoom, (coordinate, activeZoom) => map.project(coordinate, activeZoom)),
+    [journeyStops, map, zoom]
+  );
+
+  return (
+    <>
+      {clusteredStops.map((item) => {
+        if (item.type === 'cluster') {
+          const count = item.stops.length;
+          const bounds = getMapBounds(item.stops.map((entry) => entry.stop));
+
+          return (
+            <Marker
+              key={`cluster-${item.stops.map((entry) => entry.stop.dayId).join('-')}`}
+              position={item.coordinate}
+              icon={createHankoClusterIcon(count, getHankoClusterSizeTier(count))}
+              eventHandlers={{
+                click: () => {
+                  if (bounds) {
+                    map.fitBounds(bounds, {
+                      padding: [36, 36],
+                      maxZoom: CLUSTER_DISABLE_ZOOM,
+                    });
+                  }
+                },
+              }}
+            />
+          );
+        }
+
+        const representativeMedia = item.stop.media[0];
+        const previewId = representativeMedia?.id ?? item.stop.dayId;
+
+        return (
+          <Marker
+            key={item.stop.dayId}
+            position={item.stop.coordinate}
+            icon={createHankoIcon(item.index)}
+            eventHandlers={{
+              mouseover: () => {
+                if (representativeMedia) {
+                  preloadImageUrl(representativeMedia.thumbnailUrl || representativeMedia.url).catch(
+                    () => undefined
+                  );
+                }
+              },
+            }}
+          >
+            <Popup className="polaroid-popup">
+              <div className="polaroid-frame">
+                <div className="polaroid-image-container">
+                  {representativeMedia ? (
+                    <img
+                      src={representativeMedia.thumbnailUrl || representativeMedia.url}
+                      alt={item.stop.dayId}
+                      className="polaroid-image"
+                      loading="lazy"
+                    />
+                  ) : (
+                    <div className="polaroid-placeholder">
+                      <ImageIcon size={32} />
+                    </div>
+                  )}
+                </div>
+                <div className="polaroid-caption">
+                  <div className="polaroid-date">
+                    <Calendar size={12} />
+                    <span>{formatDateSwedish(representativeMedia?.capturedAt || new Date())}</span>
+                  </div>
+                  <p className="polaroid-count">
+                    {item.stop.media.length} {item.stop.media.length === 1 ? 'minne' : 'minnen'}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className="polaroid-action-btn"
+                  data-testid={`map-open-media-${previewId}`}
+                  onClick={() => onMediaOpen?.(item.stop.media, 0)}
+                >
+                  Upptäck dagen
+                </button>
+              </div>
+            </Popup>
+          </Marker>
+        );
+      })}
+    </>
+  );
+};
+
 const MapTab: React.FC<MapTabProps> = ({ isActive = true, onMediaOpen }) => {
   const { media, loading, error } = useAllMedia();
   const journeyStops = React.useMemo(() => getJourneyPath(media), [media]);
   const bounds = React.useMemo(() => getMapBounds(journeyStops), [journeyStops]);
-  const journeyCoordinates = React.useMemo(() => journeyStops.map(s => s.coordinate), [journeyStops]);
+  const journeyCoordinates = React.useMemo(
+    () => journeyStops.map((stop) => stop.coordinate),
+    [journeyStops]
+  );
   const hasAnyMedia = media.length > 0;
 
   return (
@@ -108,71 +313,34 @@ const MapTab: React.FC<MapTabProps> = ({ isActive = true, onMediaOpen }) => {
             />
 
             {journeyCoordinates.length > 1 && (
-              <Polyline
-                positions={journeyCoordinates}
-                pathOptions={{ 
-                  color: '#BC002D', // Japanese Red
-                  weight: 3,
-                  opacity: 0.7,
-                  dashArray: '8, 8',
-                  lineJoin: 'round'
-                }}
-                className="red-thread"
-              />
+              <>
+                <Polyline
+                  positions={journeyCoordinates}
+                  pathOptions={{
+                    color: '#7d1f33',
+                    weight: 4,
+                    opacity: 0.36,
+                    lineCap: 'round',
+                    lineJoin: 'round',
+                  }}
+                  className="red-thread-base"
+                />
+                <Polyline
+                  positions={journeyCoordinates}
+                  pathOptions={{
+                    color: '#BC002D',
+                    weight: 2.4,
+                    opacity: 0.68,
+                    dashArray: '1 16',
+                    lineCap: 'round',
+                    lineJoin: 'round',
+                  }}
+                  className="red-thread-sheen"
+                />
+              </>
             )}
 
-            {journeyStops.map((stop, index) => {
-              const representativeMedia = stop.media[0];
-              return (
-                <Marker 
-                  key={stop.dayId} 
-                  position={stop.coordinate}
-                  icon={createHankoIcon(index)}
-                  eventHandlers={{
-                    mouseover: () => {
-                      if (representativeMedia) {
-                        preloadImageUrl(representativeMedia.thumbnailUrl || representativeMedia.url).catch(() => undefined);
-                      }
-                    }
-                  }}
-                >
-                  <Popup className="polaroid-popup">
-                    <div className="polaroid-frame">
-                      <div className="polaroid-image-container">
-                        {representativeMedia ? (
-                          <img
-                            src={representativeMedia.thumbnailUrl || representativeMedia.url}
-                            alt={stop.dayId}
-                            className="polaroid-image"
-                            loading="lazy"
-                          />
-                        ) : (
-                          <div className="polaroid-placeholder">
-                            <ImageIcon size={32} />
-                          </div>
-                        )}
-                      </div>
-                      <div className="polaroid-caption">
-                        <div className="polaroid-date">
-                          <Calendar size={12} />
-                          <span>{formatDateSwedish(representativeMedia?.capturedAt || new Date())}</span>
-                        </div>
-                        <p className="polaroid-count">
-                          {stop.media.length} {stop.media.length === 1 ? 'minne' : 'minnen'}
-                        </p>
-                      </div>
-                      <button
-                        type="button"
-                        className="polaroid-action-btn"
-                        onClick={() => onMediaOpen?.(stop.media, 0)}
-                      >
-                        Upptäck dagen
-                      </button>
-                    </div>
-                  </Popup>
-                </Marker>
-              );
-            })}
+            <JourneyMarkers journeyStops={journeyStops} onMediaOpen={onMediaOpen} />
           </MapContainer>
         )}
       </div>
@@ -236,65 +404,162 @@ const MapTab: React.FC<MapTabProps> = ({ isActive = true, onMediaOpen }) => {
           height: 100%;
           width: 100%;
           z-index: 10;
-          background: #f8f6f1; /* Washi paper-like map background tint */
+          background: #f8f6f1;
         }
 
-        /* The Red Thread Animation */
-        .red-thread {
-          stroke-dasharray: 10, 10;
-          stroke-dashoffset: 1000;
-          animation: draw-thread 5s linear forwards;
+        .red-thread-base {
+          filter: drop-shadow(0 0 7px rgba(188, 0, 45, 0.12));
         }
 
-        @keyframes draw-thread {
-          to {
+        .red-thread-sheen {
+          stroke-dashoffset: 0;
+          animation: thread-sheen-drift 22s ease-in-out infinite alternate;
+          filter: drop-shadow(0 0 6px rgba(188, 0, 45, 0.2));
+        }
+
+        @keyframes thread-sheen-drift {
+          0% {
             stroke-dashoffset: 0;
+            opacity: 0.48;
+          }
+
+          50% {
+            opacity: 0.78;
+          }
+
+          100% {
+            stroke-dashoffset: -180;
+            opacity: 0.4;
           }
         }
 
-        /* Hanko Stamp Marker */
-        .hanko-marker-container {
+        @media (prefers-reduced-motion: reduce) {
+          .red-thread-sheen {
+            animation: none;
+            opacity: 0.5;
+          }
+        }
+
+        .hanko-marker-container,
+        .hanko-cluster-container {
           background: transparent !important;
           border: none !important;
         }
 
-        .hanko-stamp {
-          width: 42px;
-          height: 42px;
-          background: #BC002D; /* Japanese Sun Red */
-          border: 2px solid #BC002D;
-          border-radius: 5px; /* Square with slight roundness like a real hanko */
+        .mon-badge,
+        .mon-cluster {
+          position: relative;
           display: flex;
           align-items: center;
           justify-content: center;
-          box-shadow: 0 2px 6px rgba(188, 0, 45, 0.4), inset 0 0 10px rgba(0,0,0,0.1);
-          transform: rotate(-3deg);
+          border-radius: 50%;
+          background:
+            radial-gradient(circle at 30% 28%, #d84a63 0, #c91f43 26%, #BC002D 54%, #8b001d 100%);
+          border: 2px solid rgba(118, 0, 24, 0.92);
+          box-shadow:
+            0 5px 14px rgba(188, 0, 45, 0.28),
+            inset 0 1px 0 rgba(255, 224, 230, 0.35),
+            inset 0 -2px 6px rgba(88, 0, 18, 0.25);
           transition: all 0.3s ease;
         }
 
-        .hanko-stamp:hover {
-          transform: rotate(2deg) scale(1.1);
-          box-shadow: 0 4px 12px rgba(188, 0, 45, 0.5);
+        .mon-badge {
+          width: 46px;
+          height: 46px;
+          transform: scale(1);
         }
 
-        .hanko-inner {
-          width: 32px;
-          height: 32px;
-          border: 1px solid rgba(255, 255, 255, 0.4);
+        .mon-badge::before,
+        .mon-cluster::before {
+          content: '';
+          position: absolute;
+          inset: 4px;
+          border-radius: 50%;
+          border: 1px solid rgba(255, 238, 242, 0.58);
+          box-shadow: inset 0 0 0 1px rgba(119, 0, 24, 0.2);
+        }
+
+        .mon-badge::after,
+        .mon-cluster::after {
+          content: '';
+          position: absolute;
+          inset: 8px;
+          border-radius: 50%;
+          background:
+            radial-gradient(circle at 50% 17%, rgba(255, 235, 239, 0.26) 0 12%, transparent 13%),
+            radial-gradient(circle at 83% 50%, rgba(255, 235, 239, 0.22) 0 12%, transparent 13%),
+            radial-gradient(circle at 50% 83%, rgba(255, 235, 239, 0.22) 0 12%, transparent 13%),
+            radial-gradient(circle at 17% 50%, rgba(255, 235, 239, 0.22) 0 12%, transparent 13%);
+          opacity: 0.9;
+          pointer-events: none;
+        }
+
+        .mon-badge:hover {
+          transform: scale(1.1);
+          box-shadow:
+            0 8px 18px rgba(188, 0, 45, 0.34),
+            inset 0 1px 0 rgba(255, 224, 230, 0.35),
+            inset 0 -2px 6px rgba(88, 0, 18, 0.25);
+        }
+
+        .mon-core,
+        .mon-cluster-core {
+          position: relative;
           display: flex;
           align-items: center;
           justify-content: center;
+          border-radius: 50%;
+          background: rgba(122, 0, 28, 0.26);
+          border: 1px solid rgba(255, 242, 244, 0.54);
+          backdrop-filter: blur(1px);
+          z-index: 1;
         }
 
-        .hanko-label {
+        .mon-core {
+          width: 22px;
+          height: 22px;
+        }
+
+        .mon-number,
+        .mon-cluster-count {
           color: white;
-          font-family: 'Zen Kurenaido', 'Brush Script MT', cursive;
+          font-family: var(--font-mono);
           font-weight: 700;
-          font-size: 1.1rem;
-          text-shadow: 1px 1px 2px rgba(0,0,0,0.2);
+          line-height: 1;
+          text-shadow: 0 1px 2px rgba(72, 0, 15, 0.3);
         }
 
-        /* Polaroid Popup */
+        .mon-number {
+          font-size: 0.95rem;
+        }
+
+        .mon-cluster {
+          width: var(--mon-cluster-size);
+          height: var(--mon-cluster-size);
+          box-shadow:
+            0 8px 20px rgba(188, 0, 45, 0.28),
+            inset 0 1px 0 rgba(255, 224, 230, 0.35),
+            inset 0 -2px 6px rgba(88, 0, 18, 0.25);
+        }
+
+        .mon-cluster-core {
+          width: var(--mon-cluster-inner-size);
+          height: var(--mon-cluster-inner-size);
+        }
+
+        .mon-cluster-count {
+          font-size: 1rem;
+          letter-spacing: 0.02em;
+        }
+
+        .hanko-cluster-medium .mon-cluster-count {
+          font-size: 1.08rem;
+        }
+
+        .hanko-cluster-large .mon-cluster-count {
+          font-size: 1.18rem;
+        }
+
         .polaroid-popup .leaflet-popup-content-wrapper {
           background: transparent;
           box-shadow: none;
@@ -302,7 +567,7 @@ const MapTab: React.FC<MapTabProps> = ({ isActive = true, onMediaOpen }) => {
         }
 
         .polaroid-popup .leaflet-popup-tip-container {
-          display: none; /* Clean look */
+          display: none;
         }
 
         .polaroid-frame {
