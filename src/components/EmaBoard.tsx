@@ -201,7 +201,7 @@ const EmaBoard: React.FC<EmaBoardProps> = ({ dayId }) => {
                 placeholder="En kort hälsning..."
                 value={draftText}
                 onChange={(e) => setDraftText(e.target.value)}
-                maxLength={80}
+                maxLength={70}
                 rows={2}
                 required
                 disabled={isSubmitting}
@@ -223,15 +223,15 @@ const EmaBoard: React.FC<EmaBoardProps> = ({ dayId }) => {
 
       <style>{`
         .ema-board-section {
-          margin-top: 4rem;
-          padding-top: 3rem;
+          margin-top: 3rem;
+          padding-top: 1.75rem;
           border-top: 1px solid var(--border-color);
           position: relative;
         }
 
         .ema-board-header {
           text-align: center;
-          margin-bottom: 2.5rem;
+          margin-bottom: 1.4rem;
         }
 
         .ema-title {
@@ -256,7 +256,7 @@ const EmaBoard: React.FC<EmaBoardProps> = ({ dayId }) => {
           display: flex;
           flex-direction: column;
           gap: var(--ema-row-gap);
-          padding: 1.85rem 0.75rem 0.6rem;
+          padding: 1rem 0.75rem 0.6rem;
         }
 
         .ema-row {
@@ -340,7 +340,7 @@ const EmaBoard: React.FC<EmaBoardProps> = ({ dayId }) => {
 
         .ema-content {
           position: absolute;
-          top: 57%;
+          top: 55.6%;
           left: 50%;
           transform: translate(-50%, -50%);
           width: 69%;
@@ -358,7 +358,7 @@ const EmaBoard: React.FC<EmaBoardProps> = ({ dayId }) => {
           font-family: var(--font-mono);
           color: #4a3423;
           line-height: 1.15;
-          margin-bottom: 0.35rem;
+          margin-bottom: 0.18rem;
           overflow-wrap: anywhere;
           word-break: normal;
           max-width: 100%;
@@ -377,6 +377,7 @@ const EmaBoard: React.FC<EmaBoardProps> = ({ dayId }) => {
           color: #5d2e0d;
           text-transform: uppercase;
           letter-spacing: 0.05em;
+          line-height: 1;
           white-space: nowrap;
           overflow: hidden;
           text-overflow: ellipsis;
@@ -535,13 +536,22 @@ const EmaBoard: React.FC<EmaBoardProps> = ({ dayId }) => {
         }
 
         @media (max-width: 640px) {
+          .ema-board-section {
+            margin-top: 2.4rem;
+            padding-top: 1.35rem;
+          }
+
+          .ema-board-header {
+            margin-bottom: 1rem;
+          }
+
           .ema-rack {
             --ema-card-width: 100%;
             --ema-card-height: 154px;
             --ema-row-gap: 1.75rem;
             --ema-column-gap: 0.45rem;
             --ema-hang-gap: 0.16rem;
-            padding: 1.15rem 0 0.3rem;
+            padding: 0.65rem 0 0.3rem;
           }
 
           .ema-rail {
@@ -580,7 +590,7 @@ const EmaBoard: React.FC<EmaBoardProps> = ({ dayId }) => {
 
           .ema-content {
             width: 72%;
-            top: 57.5%;
+            top: 55.3%;
           }
 
           .ema-emoji {
@@ -591,7 +601,7 @@ const EmaBoard: React.FC<EmaBoardProps> = ({ dayId }) => {
           .ema-text {
             line-height: 1.08;
             height: 3.24em;
-            margin-bottom: 0.18rem;
+            margin-bottom: 0.1rem;
             padding: 0 1px;
           }
 
@@ -632,7 +642,7 @@ const EmaBoard: React.FC<EmaBoardProps> = ({ dayId }) => {
 
           .ema-content {
             width: 73%;
-            top: 57%;
+            top: 55%;
           }
 
           .ema-text {

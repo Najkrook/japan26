@@ -487,7 +487,7 @@ function App() {
 
         .hero-description-small {
           font-family: var(--font-main);
-          font-size: 1rem;
+          font-size: 0.70rem;
           color: var(--text-dim);
           opacity: 0.7;
           letter-spacing: 0.05em;
