@@ -5,7 +5,7 @@ import { getHardcodedAccountByUid } from '../config/hardcodedAccounts';
 import type { HardcodedAccountProfile, UserRole } from '../types';
 
 const getUnauthorizedMessage = (): string =>
-  'Kontot \u00e4r inloggat men saknar uppladdnings- och adminbeh\u00f6righet. Bes\u00f6kare kan fortfarande titta och kommentera utan att logga in.';
+  'Kontot \u00e4r inloggat men saknar adminbeh\u00f6righet. Bes\u00f6kare kan fortfarande titta och kommentera utan att logga in.';
 
 export const useAdmin = () => {
   const [user, setUser] = useState<User | null>(null);
@@ -68,7 +68,7 @@ export const useAdmin = () => {
 
   const role: UserRole | null = profile?.role ?? null;
   const isAdmin = role === 'admin';
-  const canPost = isAdmin || role === 'poster';
+  const canPost = isAdmin;
 
   return {
     user,

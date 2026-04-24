@@ -8,7 +8,8 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "test": "vitest run"
+    "test": "vitest run",
+    "sync:firebase-rules": "node scripts/syncFirebaseUploaderRules.mjs"
   },
   "dependencies": {
     "@types/leaflet": "^1.9.21",

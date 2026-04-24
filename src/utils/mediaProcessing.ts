@@ -120,28 +120,27 @@ export const extractCapturedAt = async (
 
   if (kind === 'photo') {
     try {
-      const metadata = await exifr.parse(file);
+      const metadata = await exifr.parse(file, {
+        pick: ['DateTimeOriginal', 'CreateDate'],
+      });
 
       if (metadata) {
-        if (metadata.latitude !== undefined && metadata.longitude !== undefined) {
-          location = {
-            latitude: metadata.latitude,
-            longitude: metadata.longitude,
-          };
-        }
         candidate = metadata.DateTimeOriginal ?? metadata.CreateDate;
       }
     } catch (error) {
-      console.warn('Could not read EXIF metadata in one pass, trying fallback', error);
-      // Fallback specifically for GPS if main parse failed (some HEIC files need this wrapper)
-      try {
-         const gps = await exifr.gps(file);
-         if (gps && gps.latitude !== undefined && gps.longitude !== undefined) {
-            location = { latitude: gps.latitude, longitude: gps.longitude };
-         }
-      } catch (e) {
-         console.warn('Fallback GPS read failed', e);
+      console.warn('Could not read EXIF capture date, falling back to file metadata', error);
+    }
+
+    try {
+      const gps = await exifr.gps(file);
+      if (gps && gps.latitude !== undefined && gps.longitude !== undefined) {
+        location = {
+          latitude: gps.latitude,
+          longitude: gps.longitude,
+        };
       }
+    } catch (error) {
+      console.warn('Could not read GPS metadata', error);
     }
   }
 

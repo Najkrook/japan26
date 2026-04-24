@@ -35,6 +35,11 @@ export const mapDay = (snapshot: QueryDocumentSnapshot<DocumentData>): Day => {
 export const mapMedia = (snapshot: QueryDocumentSnapshot<DocumentData>): Media => {
   const data = snapshot.data();
   const capturedAt = timestampToDate(data.capturedAt) ?? new Date();
+  const uploadStatus =
+    data.uploadStatus === 'uploading' || data.uploadStatus === 'error' || data.uploadStatus === 'ready'
+      ? data.uploadStatus
+      : 'ready';
+  const capturedAtSource = data.capturedAtSource === 'exif' ? 'exif' : 'fallback';
 
   return {
     id: snapshot.id,
@@ -43,6 +48,7 @@ export const mapMedia = (snapshot: QueryDocumentSnapshot<DocumentData>): Media =
     url: typeof data.url === 'string' ? data.url : '',
     thumbnailUrl: typeof data.thumbnailUrl === 'string' ? data.thumbnailUrl : typeof data.url === 'string' ? data.url : '',
     storagePath: typeof data.storagePath === 'string' ? data.storagePath : '',
+    thumbnailStoragePath: typeof data.thumbnailStoragePath === 'string' ? data.thumbnailStoragePath : '',
     fileName: typeof data.fileName === 'string' ? data.fileName : snapshot.id,
     capturedAt,
     uploadedAt: timestampToDate(data.uploadedAt),
@@ -51,6 +57,9 @@ export const mapMedia = (snapshot: QueryDocumentSnapshot<DocumentData>): Media =
     caption: typeof data.caption === 'string' ? data.caption : undefined,
     latitude: typeof data.latitude === 'number' ? data.latitude : undefined,
     longitude: typeof data.longitude === 'number' ? data.longitude : undefined,
+    uploadStatus,
+    capturedAtSource,
+    uploaderUid: typeof data.uploaderUid === 'string' ? data.uploaderUid : undefined,
   };
 };
 

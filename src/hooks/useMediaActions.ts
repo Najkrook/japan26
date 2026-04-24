@@ -29,7 +29,8 @@ export const useMediaActions = () => {
           const mediaRef = ref(storage, item.storagePath);
           await deleteObject(mediaRef).catch(() => {});
           
-          const thumbPath = item.storagePath.replace('media/', 'thumbnails/');
+          const thumbPath =
+            item.thumbnailStoragePath || item.storagePath.replace('media/', 'thumbnails/');
           const thumbRef = ref(storage, thumbPath);
           await deleteObject(thumbRef).catch(() => {});
         } catch (err) {

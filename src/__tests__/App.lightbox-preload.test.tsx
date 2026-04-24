@@ -122,6 +122,7 @@ vi.mock('framer-motion', () => ({
   },
   useScroll: () => ({ scrollYProgress: 0 }),
   useSpring: () => 0,
+  useTransform: () => 0,
 }));
 
 import App from '../App';

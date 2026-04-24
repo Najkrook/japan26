@@ -32,7 +32,9 @@ export const useMedia = (dayId: string | null) => {
     const unsubscribe = onSnapshot(
       mediaQuery,
       (snapshot) => {
-        const parsedMedia = snapshot.docs.map(mapMedia);
+        const parsedMedia = snapshot.docs
+          .map(mapMedia)
+          .filter((item) => (item.uploadStatus ?? 'ready') === 'ready');
         // Sort in memory to safely handle older entries missing capturedAt
         parsedMedia.sort((a, b) => a.capturedAt.getTime() - b.capturedAt.getTime());
 

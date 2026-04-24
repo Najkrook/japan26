@@ -1,8 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import {
-  detectMediaKind,
-  extractCapturedAt,
-} from '../utils/mediaProcessing';
+import { detectMediaKind, extractCapturedAt } from '../utils/mediaProcessing';
 
 const mockExifrParse = vi.fn();
 const mockExifrGps = vi.fn();
@@ -89,7 +86,7 @@ describe('extractCapturedAt', () => {
     });
   });
 
-  it('falls back cleanly when exif parsing throws', async () => {
+  it('falls back cleanly when exif and gps parsing both throw', async () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     mockExifrParse.mockRejectedValue(new Error('broken exif'));
     mockExifrGps.mockRejectedValue(new Error('broken gps'));
@@ -104,22 +101,19 @@ describe('extractCapturedAt', () => {
     warnSpy.mockRestore();
   });
 
-  it('does not try to read gps for videos', async () => {
+  it('uses lastModified fallback for videos without attempting gps', async () => {
     const video = new File(['video'], 'tokyo.mp4', {
       type: 'video/mp4',
       lastModified: file.lastModified,
     });
-    const capturedAt = new Date('2026-04-14T22:00:00Z');
-    mockExifrParse.mockResolvedValue({
-      CreateDate: capturedAt,
-    });
 
     await expect(extractCapturedAt(video, detectMediaKind(video))).resolves.toEqual({
-      capturedAt,
-      source: 'exif',
+      capturedAt: new Date(file.lastModified),
+      source: 'fallback',
       location: undefined,
     });
 
+    expect(mockExifrParse).not.toHaveBeenCalled();
     expect(mockExifrGps).not.toHaveBeenCalled();
   });
 });

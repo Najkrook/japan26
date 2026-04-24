@@ -35,7 +35,7 @@ const AdminLogin: React.FC<AdminLoginProps> = ({ onLogin, onClose, loading = fal
             </div>
           </div>
           <h2>Logga in</h2>
-          <p>Bara godkända konton får uppladdningsåtkomst och adminbehörighet.</p>
+          <p>Bara administratorer kan ladda upp, redigera och radera media.</p>
         </div>
 
         {error && (
@@ -49,11 +49,11 @@ const AdminLogin: React.FC<AdminLoginProps> = ({ onLogin, onClose, loading = fal
           <div className="google-icon-wrapper">
             <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" />
           </div>
-          <span>{loading ? 'Loggar in...' : 'Fortsätt med Google'}</span>
+          <span>{loading ? 'Loggar in...' : 'Fortsatt med Google'}</span>
         </button>
 
         <div className="modal-footer">
-          <p>Besökare kan fortfarande titta och kommentera utan att logga in.</p>
+          <p>Besokare kan fortfarande titta och kommentera utan att logga in.</p>
         </div>
       </motion.div>
 

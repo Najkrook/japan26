@@ -17,6 +17,7 @@ export interface Media {
   url: string;
   thumbnailUrl: string;
   storagePath: string;
+  thumbnailStoragePath?: string;
   fileName: string;
   capturedAt: Date;
   uploadedAt?: Date | null;
@@ -25,6 +26,9 @@ export interface Media {
   caption?: string;
   latitude?: number;
   longitude?: number;
+  uploadStatus?: 'uploading' | 'ready' | 'error';
+  capturedAtSource?: 'exif' | 'fallback';
+  uploaderUid?: string;
 }
 
 export interface Comment {

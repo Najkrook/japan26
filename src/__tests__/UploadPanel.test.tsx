@@ -5,13 +5,17 @@ import UploadPanel from '../components/UploadPanel';
 import type { Day } from '../types';
 
 const {
-  mockAddDoc,
   mockCollection,
+  mockDeleteDoc,
+  mockDoc,
+  mockSetDoc,
+  mockUpdateDoc,
   mockServerTimestamp,
   mockGetDownloadURL,
   mockRef,
   mockUploadBytes,
   mockUploadBytesResumable,
+  mockDeleteObject,
   mockConvertHeicToJpeg,
   mockCompressImage,
   mockCreateThumbnail,
@@ -19,13 +23,17 @@ const {
   mockExtractCapturedAt,
   mockReadMediaDimensions,
 } = vi.hoisted(() => ({
-  mockAddDoc: vi.fn(),
-  mockCollection: vi.fn(() => 'media-collection'),
+  mockCollection: vi.fn(),
+  mockDeleteDoc: vi.fn(),
+  mockDoc: vi.fn(),
+  mockSetDoc: vi.fn(),
+  mockUpdateDoc: vi.fn(),
   mockServerTimestamp: vi.fn(() => 'server-timestamp'),
   mockGetDownloadURL: vi.fn(),
   mockRef: vi.fn((_storage, path: string) => ({ fullPath: path })),
   mockUploadBytes: vi.fn(),
   mockUploadBytesResumable: vi.fn(),
+  mockDeleteObject: vi.fn(),
   mockConvertHeicToJpeg: vi.fn(),
   mockCompressImage: vi.fn(),
   mockCreateThumbnail: vi.fn(),
@@ -34,18 +42,29 @@ const {
   mockReadMediaDimensions: vi.fn(),
 }));
 
+let generatedDocCounter = 0;
+
 vi.mock('../config/firebase', () => ({
+  auth: {
+    currentUser: {
+      uid: 'dGcKysUwFZNfkur2SS3G2UERX242',
+    },
+  },
   db: {},
   storage: {},
 }));
 
 vi.mock('firebase/firestore', () => ({
-  addDoc: mockAddDoc,
   collection: mockCollection,
+  deleteDoc: mockDeleteDoc,
+  doc: mockDoc,
+  setDoc: mockSetDoc,
+  updateDoc: mockUpdateDoc,
   serverTimestamp: () => mockServerTimestamp(),
 }));
 
 vi.mock('firebase/storage', () => ({
+  deleteObject: mockDeleteObject,
   getDownloadURL: mockGetDownloadURL,
   ref: mockRef,
   uploadBytes: mockUploadBytes,
@@ -53,12 +72,12 @@ vi.mock('firebase/storage', () => ({
 }));
 
 vi.mock('../utils/mediaProcessing', () => ({
-  convertHeicToJpeg: (...args: unknown[]) => mockConvertHeicToJpeg(...args),
-  compressImage: (...args: unknown[]) => mockCompressImage(...args),
-  createThumbnail: (...args: unknown[]) => mockCreateThumbnail(...args),
-  detectMediaKind: (...args: unknown[]) => mockDetectMediaKind(...args),
-  extractCapturedAt: (...args: unknown[]) => mockExtractCapturedAt(...args),
-  readMediaDimensions: (...args: unknown[]) => mockReadMediaDimensions(...args),
+  convertHeicToJpeg: mockConvertHeicToJpeg,
+  compressImage: mockCompressImage,
+  createThumbnail: mockCreateThumbnail,
+  detectMediaKind: mockDetectMediaKind,
+  extractCapturedAt: mockExtractCapturedAt,
+  readMediaDimensions: mockReadMediaDimensions,
 }));
 
 vi.mock('framer-motion', () => ({
@@ -79,61 +98,113 @@ const days: Day[] = [
   },
 ];
 
-const renderUploadPanel = () =>
+const createResumableTask = () => ({
+  on: (
+    _event: string,
+    onProgress?: (snapshot: { bytesTransferred: number; totalBytes: number }) => void,
+    _onError?: (error: unknown) => void,
+    onComplete?: () => void,
+  ) => {
+    onProgress?.({ bytesTransferred: 5, totalBytes: 10 });
+    onProgress?.({ bytesTransferred: 10, totalBytes: 10 });
+    onComplete?.();
+  },
+});
+
+const renderUploadPanel = (ensureDay = vi.fn().mockResolvedValue('day-1'), onUploadComplete = vi.fn()) =>
   render(
     <UploadPanel
       days={days}
       selectedDay={days[0]}
-      ensureDay={vi.fn().mockResolvedValue('day-1')}
-      onUploadComplete={vi.fn()}
+      ensureDay={ensureDay}
+      onUploadComplete={onUploadComplete}
     />,
   );
 
 beforeEach(() => {
-  mockAddDoc.mockReset();
-  mockCollection.mockClear();
+  generatedDocCounter = 0;
+
+  mockCollection.mockReset();
+  mockCollection.mockImplementation((_db, path: string) => ({ path }));
+
+  mockDoc.mockReset();
+  mockDoc.mockImplementation((first: unknown, second?: string, third?: string) => {
+    if (typeof third === 'string' && typeof second === 'string') {
+      return { id: third, path: `${second}/${third}` };
+    }
+
+    if (
+      first &&
+      typeof first === 'object' &&
+      'path' in (first as Record<string, unknown>) &&
+      typeof (first as { path: string }).path === 'string' &&
+      second === undefined
+    ) {
+      generatedDocCounter += 1;
+      return {
+        id: `media-doc-${generatedDocCounter}`,
+        path: `${(first as { path: string }).path}/media-doc-${generatedDocCounter}`,
+      };
+    }
+
+    if (
+      first &&
+      typeof first === 'object' &&
+      'path' in (first as Record<string, unknown>) &&
+      typeof second === 'string'
+    ) {
+      return {
+        id: second,
+        path: `${(first as { path: string }).path}/${second}`,
+      };
+    }
+
+    return { id: 'unknown-doc', path: 'unknown-doc' };
+  });
+
+  mockSetDoc.mockReset();
+  mockSetDoc.mockResolvedValue(undefined);
+  mockDeleteDoc.mockReset();
+  mockDeleteDoc.mockResolvedValue(undefined);
+  mockUpdateDoc.mockReset();
+  mockUpdateDoc.mockResolvedValue(undefined);
   mockServerTimestamp.mockClear();
+
+  mockRef.mockReset();
+  mockRef.mockImplementation((_storage, path: string) => ({ fullPath: path }));
   mockGetDownloadURL.mockReset();
-  mockRef.mockClear();
+  mockGetDownloadURL.mockImplementation(async (storageRef: { fullPath: string }) =>
+    `https://example.com/${storageRef.fullPath.replace(/\//g, '_')}`,
+  );
   mockUploadBytes.mockReset();
+  mockUploadBytes.mockResolvedValue(undefined);
   mockUploadBytesResumable.mockReset();
+  mockUploadBytesResumable.mockImplementation(() => createResumableTask());
+  mockDeleteObject.mockReset();
+  mockDeleteObject.mockResolvedValue(undefined);
+
   mockConvertHeicToJpeg.mockReset();
+  mockConvertHeicToJpeg.mockImplementation(async (file: File) => file);
   mockCompressImage.mockReset();
+  mockCompressImage.mockImplementation(async (file: File) => file);
   mockCreateThumbnail.mockReset();
+  mockCreateThumbnail.mockResolvedValue(new Blob(['thumb'], { type: 'image/jpeg' }));
   mockDetectMediaKind.mockReset();
+  mockDetectMediaKind.mockReturnValue('photo');
   mockExtractCapturedAt.mockReset();
   mockReadMediaDimensions.mockReset();
-
-  mockDetectMediaKind.mockReturnValue('photo');
-  mockConvertHeicToJpeg.mockImplementation(async (file: File) => file);
-  mockCompressImage.mockImplementation(async (file: File) => file);
-  mockCreateThumbnail.mockResolvedValue(new Blob(['thumb'], { type: 'image/jpeg' }));
   mockReadMediaDimensions.mockResolvedValue({ width: 1600, height: 900 });
-  mockGetDownloadURL
-    .mockResolvedValueOnce('https://example.com/photo.jpg')
-    .mockResolvedValueOnce('https://example.com/thumb.jpg');
-  mockUploadBytes.mockResolvedValue(undefined);
-  mockUploadBytesResumable.mockImplementation(() => ({
-    on: (
-      _event: string,
-      onProgress?: (snapshot: { bytesTransferred: number; totalBytes: number }) => void,
-      _onError?: (error: unknown) => void,
-      onComplete?: () => void,
-    ) => {
-      onProgress?.({ bytesTransferred: 1, totalBytes: 1 });
-      onComplete?.();
-    },
-  }));
 });
 
 afterEach(() => {
   cleanup();
 });
 
-describe('UploadPanel payload', () => {
-  it('includes latitude and longitude when extractCapturedAt returns location', async () => {
+describe('UploadPanel lifecycle', () => {
+  it('creates a draft record, uploads files, and finalizes with metadata', async () => {
     const file = new File(['photo'], 'tokyo.jpg', { type: 'image/jpeg' });
     const capturedAt = new Date('2026-04-15T12:00:00Z');
+    const onUploadComplete = vi.fn();
     mockExtractCapturedAt.mockResolvedValue({
       capturedAt,
       source: 'exif',
@@ -143,18 +214,18 @@ describe('UploadPanel payload', () => {
       },
     });
 
-    renderUploadPanel();
+    renderUploadPanel(vi.fn().mockResolvedValue('day-1'), onUploadComplete);
 
     const input = document.querySelector('input[type="file"]') as HTMLInputElement;
     fireEvent.change(input, { target: { files: [file] } });
 
-    await screen.findByText('Ladda upp 1 filer');
-    fireEvent.click(screen.getByText('Ladda upp 1 filer'));
+    await screen.findByRole('button', { name: 'Ladda upp 1 filer' });
+    fireEvent.click(screen.getByRole('button', { name: 'Ladda upp 1 filer' }));
 
-    await waitFor(() => expect(mockAddDoc).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(mockSetDoc).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(mockUpdateDoc).toHaveBeenCalledTimes(1));
 
-    expect(mockExtractCapturedAt).toHaveBeenCalledWith(file, 'photo');
-    expect(mockAddDoc.mock.calls[0][1]).toMatchObject({
+    expect(mockSetDoc.mock.calls[0][1]).toMatchObject({
       dayId: 'day-1',
       type: 'photo',
       fileName: 'tokyo.jpg',
@@ -163,16 +234,96 @@ describe('UploadPanel payload', () => {
       height: 900,
       latitude: 35.68,
       longitude: 139.76,
+      uploadStatus: 'uploading',
+      capturedAtSource: 'exif',
+      uploaderUid: 'dGcKysUwFZNfkur2SS3G2UERX242',
     });
+    expect(mockUpdateDoc.mock.calls[0][1]).toMatchObject({
+      uploadStatus: 'ready',
+    });
+    expect(onUploadComplete).toHaveBeenCalledWith('day-1');
+    expect(screen.getByText('1 filer laddades upp utan fel.')).toBeTruthy();
+    expect(screen.getByText('100%')).toBeTruthy();
   });
 
-  it('omits latitude and longitude when no location is returned', async () => {
-    const file = new File(['photo'], 'osaka.jpg', { type: 'image/jpeg' });
-    const capturedAt = new Date('2026-04-16T09:00:00Z');
+  it('resolves ensureDay once per unique day across a batch', async () => {
+    const first = new File(['a'], 'tokyo-1.jpg', { type: 'image/jpeg' });
+    const second = new File(['b'], 'tokyo-2.jpg', { type: 'image/jpeg' });
+    const third = new File(['c'], 'osaka.jpg', { type: 'image/jpeg' });
+    const ensureDay = vi.fn(async (date: Date) =>
+      date.toISOString().startsWith('2026-04-15') ? 'day-1' : 'day-2',
+    );
+
+    mockExtractCapturedAt
+      .mockResolvedValueOnce({
+        capturedAt: new Date('2026-04-15T08:00:00Z'),
+        source: 'exif',
+        location: undefined,
+      })
+      .mockResolvedValueOnce({
+        capturedAt: new Date('2026-04-15T20:00:00Z'),
+        source: 'fallback',
+        location: undefined,
+      })
+      .mockResolvedValueOnce({
+        capturedAt: new Date('2026-04-16T09:00:00Z'),
+        source: 'fallback',
+        location: undefined,
+      });
+
+    renderUploadPanel(ensureDay);
+
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    fireEvent.change(input, { target: { files: [first, second, third] } });
+
+    await screen.findByRole('button', { name: 'Ladda upp 3 filer' });
+    fireEvent.click(screen.getByRole('button', { name: 'Ladda upp 3 filer' }));
+
+    await waitFor(() => expect(mockSetDoc).toHaveBeenCalledTimes(3));
+    expect(ensureDay).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not attempt uploads for files that fail preparation or validation', async () => {
+    const goodFile = new File(['photo'], 'tokyo.jpg', { type: 'image/jpeg' });
+    const badFile = new File(['bad'], 'notes.txt', { type: 'text/plain' });
     mockExtractCapturedAt.mockResolvedValue({
-      capturedAt,
+      capturedAt: new Date('2026-04-15T12:00:00Z'),
       source: 'fallback',
       location: undefined,
+    });
+    mockDetectMediaKind.mockImplementation(() => 'photo');
+
+    renderUploadPanel();
+
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    fireEvent.change(input, { target: { files: [goodFile, badFile] } });
+
+    await screen.findByText('Filtypen stod inte pa listan over stodda uppladdningar.');
+    fireEvent.click(screen.getByRole('button', { name: 'Ladda upp 1 filer' }));
+
+    await waitFor(() => expect(mockSetDoc).toHaveBeenCalledTimes(1));
+    expect(mockSetDoc.mock.calls[0][1].fileName).toBe('tokyo.jpg');
+  });
+
+  it('deletes failed drafts, cleans up uploaded files, and retries from the local queue', async () => {
+    const file = new File(['photo'], 'tokyo.jpg', { type: 'image/jpeg' });
+    mockExtractCapturedAt.mockResolvedValue({
+      capturedAt: new Date('2026-04-15T12:00:00Z'),
+      source: 'fallback',
+      location: undefined,
+    });
+
+    let readyUpdateAttempts = 0;
+    mockUpdateDoc.mockImplementation(async (_ref, payload) => {
+      if (payload && typeof payload === 'object' && 'uploadStatus' in (payload as Record<string, unknown>)) {
+        const status = (payload as Record<string, unknown>).uploadStatus;
+        if (status === 'ready') {
+          readyUpdateAttempts += 1;
+          if (readyUpdateAttempts === 1) {
+            throw new Error('firestore finalize failed');
+          }
+        }
+      }
     });
 
     renderUploadPanel();
@@ -180,13 +331,22 @@ describe('UploadPanel payload', () => {
     const input = document.querySelector('input[type="file"]') as HTMLInputElement;
     fireEvent.change(input, { target: { files: [file] } });
 
-    await screen.findByText('Ladda upp 1 filer');
-    fireEvent.click(screen.getByText('Ladda upp 1 filer'));
+    await screen.findByRole('button', { name: 'Ladda upp 1 filer' });
+    fireEvent.click(screen.getByRole('button', { name: 'Ladda upp 1 filer' }));
 
-    await waitFor(() => expect(mockAddDoc).toHaveBeenCalledTimes(1));
+    await screen.findByRole('button', { name: 'Forsok igen' });
+    expect(mockDeleteObject).toHaveBeenCalledTimes(2);
+    expect(mockDeleteDoc).toHaveBeenCalledTimes(1);
+    expect(screen.getByText('0 klara, 1 behovde ett nytt forsok.')).toBeTruthy();
 
-    const payload = mockAddDoc.mock.calls[0][1] as Record<string, unknown>;
-    expect(payload.latitude).toBeUndefined();
-    expect(payload.longitude).toBeUndefined();
+    fireEvent.click(screen.getByRole('button', { name: 'Forsok igen' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Ladda upp 1 filer' }));
+
+    await waitFor(() => expect(mockSetDoc).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.getByText('1 filer laddades upp utan fel.')).toBeTruthy());
+
+    const firstDocRef = mockSetDoc.mock.calls[0][0] as { id: string };
+    const secondDocRef = mockSetDoc.mock.calls[1][0] as { id: string };
+    expect(firstDocRef.id).toBe(secondDocRef.id);
   });
 });

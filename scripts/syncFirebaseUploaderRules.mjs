@@ -1,13 +1,43 @@
-rules_version = '2';
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const rootDir = path.resolve(__dirname, '..');
+const configPath = path.join(rootDir, 'src', 'config', 'authorizedUploaders.json');
+const firestoreRulesPath = path.join(rootDir, 'firestore.rules');
+const storageRulesPath = path.join(rootDir, 'storage.rules');
+
+const rawAccounts = await fs.readFile(configPath, 'utf8');
+const accounts = JSON.parse(rawAccounts);
+
+if (!Array.isArray(accounts) || accounts.length === 0) {
+  throw new Error('authorizedUploaders.json must contain at least one account.');
+}
+
+const adminAccounts = accounts.filter((account) => account?.role === 'admin');
+if (adminAccounts.length !== 1) {
+  throw new Error('authorizedUploaders.json must contain exactly one admin account.');
+}
+
+const adminUid = adminAccounts[0].uid;
+const posterUids = accounts
+  .filter((account) => account?.role === 'poster')
+  .map((account) => account.uid);
+
+const renderUidList = (uids, indent) =>
+  uids.length > 0 ? uids.map((uid) => `${indent}"${uid}"`).join(',\n') : `${indent}"__NO_POSTERS__"`;
+
+const firestoreRules = `rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     function isAdmin() {
-      return request.auth != null && request.auth.uid == "dGcKysUwFZNfkur2SS3G2UERX242";
+      return request.auth != null && request.auth.uid == "${adminUid}";
     }
 
     function isPoster() {
       return request.auth != null && request.auth.uid in [
-        "__NO_POSTERS__"
+${renderUidList(posterUids, '        ')}
       ];
     }
 
@@ -103,3 +133,55 @@ service cloud.firestore {
     }
   }
 }
+`;
+
+const storageRules = `rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    function isAdmin() {
+      return request.auth != null && request.auth.uid == "${adminUid}";
+    }
+
+    function isPoster() {
+      return request.auth != null && request.auth.uid in [
+${renderUidList(posterUids, '        ')}
+      ];
+    }
+
+    function hasMediaContentType() {
+      return request.resource.contentType.matches('image/.*') || request.resource.contentType.matches('video/.*');
+    }
+
+    function isValidMediaUpload() {
+      return request.resource != null
+        && request.resource.size > 0
+        && request.resource.size <= 262144000
+        && hasMediaContentType();
+    }
+
+    function isValidThumbnailUpload() {
+      return request.resource != null
+        && request.resource.size > 0
+        && request.resource.size <= 2097152
+        && request.resource.contentType == 'image/jpeg';
+    }
+
+    match /media/{allPaths=**} {
+      allow read: if true;
+      allow write: if isAdmin() && (request.resource == null || isValidMediaUpload());
+    }
+
+    match /thumbnails/{allPaths=**} {
+      allow read: if true;
+      allow write: if isAdmin() && (request.resource == null || isValidThumbnailUpload());
+    }
+  }
+}
+`;
+
+await Promise.all([
+  fs.writeFile(firestoreRulesPath, firestoreRules, 'utf8'),
+  fs.writeFile(storageRulesPath, storageRules, 'utf8'),
+]);
+
+console.log('Synchronized firestore.rules and storage.rules from authorizedUploaders.json');

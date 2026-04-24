@@ -22,14 +22,14 @@ const toUnicodeEscapes = (value: string): string =>
     .join('');
 
 const FORBIDDEN_SNIPPETS = [
-  '\u00c3\u00a5', // Ã¥
-  '\u00c3\u00a4', // Ã¤
-  '\u00c3\u00b6', // Ã¶
-  '\u00c3\u2026', // Ã…
-  '\u00c3\u201e', // Ã„
-  '\u00c3\u2013', // Ã–
-  '\u00ef\u00bf\u00bd', // replacement character shown as mojibake
-  '\ufffd', // replacement character
+  '\u00c3\u00a5',
+  '\u00c3\u00a4',
+  '\u00c3\u00b6',
+  '\u00c3\u2026',
+  '\u00c3\u201e',
+  '\u00c3\u2013',
+  '\u00ef\u00bf\u00bd',
+  '\ufffd',
 ];
 
 const REQUIRED_SENTINELS = [
@@ -43,11 +43,11 @@ const REQUIRED_SENTINELS = [
   },
   {
     file: 'src/components/AdminLogin.tsx',
-    expected: 'Bara godkända konton får uppladdningsåtkomst och adminbehörighet.',
+    expected: 'Bara administratorer kan ladda upp, redigera och radera media.',
   },
   {
     file: 'src/config/hardcodedAccounts.ts',
-    expected: 'Våring',
+    expected: 'Admin upload access is configured in authorizedUploaders.json.',
   },
 ];
 

@@ -29,7 +29,9 @@ export const useAllMedia = (maxItems = 1000) => {
     const unsubscribe = onSnapshot(
       mediaQuery,
       (snapshot) => {
-        const parsedMedia = snapshot.docs.map(mapMedia);
+        const parsedMedia = snapshot.docs
+          .map(mapMedia)
+          .filter((item) => (item.uploadStatus ?? 'ready') === 'ready');
         setState({
           loaded: true,
           media: parsedMedia,

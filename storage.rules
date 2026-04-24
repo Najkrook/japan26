@@ -7,25 +7,36 @@ service firebase.storage {
 
     function isPoster() {
       return request.auth != null && request.auth.uid in [
-        "VALLE_UID_PLACEHOLDER",
-        "FILLE_UID_PLACEHOLDER",
-        "VARING_UID_PLACEHOLDER",
-        "DRUFFE_UID_PLACEHOLDER"
+        "__NO_POSTERS__"
       ];
     }
 
-    function canPost() {
-      return isAdmin() || isPoster();
+    function hasMediaContentType() {
+      return request.resource.contentType.matches('image/.*') || request.resource.contentType.matches('video/.*');
+    }
+
+    function isValidMediaUpload() {
+      return request.resource != null
+        && request.resource.size > 0
+        && request.resource.size <= 262144000
+        && hasMediaContentType();
+    }
+
+    function isValidThumbnailUpload() {
+      return request.resource != null
+        && request.resource.size > 0
+        && request.resource.size <= 2097152
+        && request.resource.contentType == 'image/jpeg';
     }
 
     match /media/{allPaths=**} {
       allow read: if true;
-      allow write: if canPost();
+      allow write: if isAdmin() && (request.resource == null || isValidMediaUpload());
     }
 
     match /thumbnails/{allPaths=**} {
       allow read: if true;
-      allow write: if canPost();
+      allow write: if isAdmin() && (request.resource == null || isValidThumbnailUpload());
     }
   }
 }
