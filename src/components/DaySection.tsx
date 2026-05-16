@@ -12,6 +12,7 @@ import MediaGrid from './MediaGrid';
 interface DaySectionProps {
   day: Day;
   isActive: boolean;
+  isAdjacentToActive: boolean;
   isAdmin: boolean;
   canPost: boolean;
   authorizationError: string | null;
@@ -99,6 +100,7 @@ const DaySectionContent: React.FC<DaySectionContentProps> = ({
 const DaySection: React.FC<DaySectionProps> = ({
   day,
   isActive,
+  isAdjacentToActive,
   isAdmin,
   onVisible,
   onMediaClick,
@@ -107,11 +109,12 @@ const DaySection: React.FC<DaySectionProps> = ({
   onDeleteMedia,
 }) => {
   const [hasAnimated, setHasAnimated] = useState(false);
-  const [hasActivatedContent, setHasActivatedContent] = useState(isActive);
+  const [hasActivatedContent, setHasActivatedContent] = useState(isActive || isAdjacentToActive);
   const [isEditingText, setIsEditingText] = useState(false);
   const [draftText, setDraftText] = useState(day.description || '');
   const [draftLocation, setDraftLocation] = useState(day.location || '');
   const [isSaving, setIsSaving] = useState(false);
+
   const { ref: activeRef } = useInView({
     rootMargin: '-10% 0px -30% 0px',
     onChange: (visible) => {
@@ -121,6 +124,7 @@ const DaySection: React.FC<DaySectionProps> = ({
       }
     },
   });
+
   const { ref: nearViewportRef } = useInView({
     rootMargin: '200% 0px 200% 0px',
     onChange: (visible) => {
@@ -131,10 +135,10 @@ const DaySection: React.FC<DaySectionProps> = ({
   });
 
   React.useEffect(() => {
-    if (isActive) {
+    if (isActive || isAdjacentToActive) {
       setHasActivatedContent(true);
     }
-  }, [isActive]);
+  }, [isActive, isAdjacentToActive]);
 
   const setRefs = React.useCallback(
     (node: HTMLDivElement | null) => {
@@ -144,7 +148,8 @@ const DaySection: React.FC<DaySectionProps> = ({
     [activeRef, nearViewportRef]
   );
 
-  const contentMode: DataLoadMode = isActive ? 'live' : hasActivatedContent ? 'once' : 'off';
+  const contentMode: DataLoadMode =
+    isActive ? 'live' : hasActivatedContent || isAdjacentToActive ? 'once' : 'off';
   const shouldMountContent = contentMode !== 'off';
 
   const handleSaveText = async () => {

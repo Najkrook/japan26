@@ -162,6 +162,21 @@ function App() {
     () => days.find((day) => day.id === activeDayId) ?? days[0] ?? null,
     [days, activeDayId],
   );
+  const activeDayIndex = useMemo(
+    () => days.findIndex((day) => day.id === activeDayId),
+    [days, activeDayId],
+  );
+  const adjacentDayIds = useMemo(() => {
+    if (activeDayIndex < 0) {
+      return new Set<string>();
+    }
+
+    return new Set(
+      [days[activeDayIndex - 1]?.id, days[activeDayIndex + 1]?.id].filter(
+        (dayId): dayId is string => Boolean(dayId),
+      ),
+    );
+  }, [days, activeDayIndex]);
 
   const selectedMedia = selectedMediaIndex !== null ? lightboxMedia[selectedMediaIndex] ?? null : null;
   const nextMediaItem = selectedMediaIndex !== null ? lightboxMedia[selectedMediaIndex + 1] ?? null : null;
@@ -396,6 +411,7 @@ function App() {
                       key={day.id}
                       day={day}
                       isActive={activeDayId === day.id}
+                      isAdjacentToActive={adjacentDayIds.has(day.id)}
                       isAdmin={isAdmin}
                       canPost={canPost}
                       authorizationError={authorizationError}

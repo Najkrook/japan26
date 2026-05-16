@@ -80,6 +80,7 @@ const renderSection = (overrides: Partial<React.ComponentProps<typeof DaySection
     <DaySection
       day={dayFixture}
       isActive={false}
+      isAdjacentToActive={false}
       isAdmin={false}
       canPost={false}
       authorizationError={null}
@@ -124,13 +125,21 @@ describe('DaySection', () => {
     cleanup();
   });
 
-  it('renders the deferred state for unseen days', () => {
+  it('renders the deferred state for unseen days without adjacency', () => {
     renderSection();
 
     expect(screen.getByText('Bilderna laddas när du närmar dig dagen.')).toBeTruthy();
     expect(screen.queryByTestId('media-grid')).toBeNull();
     expect(mockUseMedia).not.toHaveBeenCalled();
     expect(mockUseDayCommentCounts).not.toHaveBeenCalled();
+  });
+
+  it('uses once-mode when the day is adjacent to the active day', () => {
+    renderSection({ isAdjacentToActive: true });
+
+    expect(screen.getByTestId('media-grid')).toBeTruthy();
+    expect(mockUseMedia).toHaveBeenLastCalledWith('day-1', 'once');
+    expect(mockUseDayCommentCounts).toHaveBeenLastCalledWith('day-1', 'once');
   });
 
   it('activates content with once-mode when the day enters the preload zone', () => {
@@ -157,6 +166,7 @@ describe('DaySection', () => {
       <DaySection
         day={dayFixture}
         isActive={false}
+        isAdjacentToActive={false}
         isAdmin={false}
         canPost={false}
         authorizationError={null}
@@ -196,6 +206,7 @@ describe('DaySection', () => {
       <DaySection
         day={dayFixture}
         isActive={false}
+        isAdjacentToActive={false}
         isAdmin={false}
         canPost={false}
         authorizationError={null}
