@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useInView } from 'react-intersection-observer';
 import { motion } from 'framer-motion';
 import { Check, Edit3, Image as ImageIcon, Loader2, X } from 'lucide-react';
@@ -12,12 +12,14 @@ import MediaGrid from './MediaGrid';
 interface DaySectionProps {
   day: Day;
   isActive: boolean;
-  isAdjacentToActive: boolean;
+  isPreviousAdjacent: boolean;
+  isNextAdjacent: boolean;
   isAdmin: boolean;
   canPost: boolean;
   authorizationError: string | null;
   onVisible: (dayId: string) => void;
   onMediaClick: (media: Media[], index: number) => void;
+  onSectionRef?: (dayId: string, node: HTMLDivElement | null) => void;
   onUpdateDay?: (id: string, data: UpdateDayInput) => Promise<void>;
   onDeleteDay?: (id: string) => Promise<void>;
   onDeleteMedia?: (item: Media) => Promise<void>;
@@ -27,17 +29,50 @@ interface DaySectionContentProps {
   dayId: string;
   mode: DataLoadMode;
   isAdmin: boolean;
+  showNextDayPreload: boolean;
   onMediaClick: (media: Media[], index: number) => void;
   onDeleteMedia?: (item: Media) => Promise<void>;
 }
 
-const MediaLoadingPreview = ({ copy }: { copy: string }) => (
-  <div className="media-loading-state" aria-label={copy}>
+const DEFAULT_SKELETON_MEDIA_COUNT = 5;
+const NEXT_DAY_PRELOAD_MEDIA_COUNT = 8;
+const cachedMediaCounts = new Map<string, number>();
+
+const getSkeletonTileCount = (mediaCount: number) => {
+  const normalizedCount = Math.max(mediaCount, 1);
+
+  if (normalizedCount === 1) {
+    return 1;
+  }
+
+  return 1 + Math.ceil((normalizedCount - 1) / 2) * 2;
+};
+
+const MediaSkeleton = ({ mediaCount }: { mediaCount: number }) => {
+  const tileCount = getSkeletonTileCount(mediaCount);
+
+  return (
     <div className="media-preview-skeleton" aria-hidden="true">
-      <div className="media-skeleton-tile media-skeleton-feature" />
-      <div className="media-skeleton-tile" />
-      <div className="media-skeleton-tile" />
+      {Array.from({ length: tileCount }, (_, index) => (
+        <div
+          key={`skeleton-${index}`}
+          className={`media-skeleton-tile ${index === 0 ? 'media-skeleton-feature' : ''}`}
+          data-testid="media-skeleton-tile"
+        />
+      ))}
     </div>
+  );
+};
+
+const MediaLoadingPreview = ({
+  copy,
+  mediaCount,
+}: {
+  copy: string;
+  mediaCount: number;
+}) => (
+  <div className="media-loading-state" aria-label={copy}>
+    <MediaSkeleton mediaCount={mediaCount} />
     <div className="loading-state-inline">
       <Loader2 className="spinner" size={24} />
       <p>{copy}</p>
@@ -45,14 +80,29 @@ const MediaLoadingPreview = ({ copy }: { copy: string }) => (
   </div>
 );
 
-const DeferredMediaPreview = () => (
+const DeferredMediaPreview = ({ mediaCount }: { mediaCount: number }) => (
   <div className="deferred-media-state">
-    <div className="media-preview-skeleton" aria-hidden="true">
-      <div className="media-skeleton-tile media-skeleton-feature" />
-      <div className="media-skeleton-tile" />
-      <div className="media-skeleton-tile" />
-    </div>
+    <MediaSkeleton mediaCount={mediaCount} />
     <p>Bilderna laddas när du närmar dig dagen.</p>
+  </div>
+);
+
+const NextDayPreloadPreview = ({ mediaCount }: { mediaCount: number }) => (
+  <div
+    className="next-day-preload-state"
+    data-testid="next-day-preload-state"
+    aria-label="Förbereder nästa dag..."
+  >
+    <MediaSkeleton mediaCount={mediaCount} />
+    <div className="next-day-loader">
+      <div className="next-day-sakura" aria-hidden="true">
+        ✿
+      </div>
+      <div className="next-day-loader-copy">
+        <p className="next-day-loader-title">Förbereder nästa dag...</p>
+        <p className="next-day-loader-subtitle">Laddar bilderna innan du scrollar vidare.</p>
+      </div>
+    </div>
   </div>
 );
 
@@ -60,17 +110,35 @@ const DaySectionContent: React.FC<DaySectionContentProps> = ({
   dayId,
   mode,
   isAdmin,
+  showNextDayPreload,
   onMediaClick,
   onDeleteMedia,
 }) => {
   const { media, loading: mediaLoading, error: mediaError } = useMedia(dayId, mode);
   const { counts: commentCounts } = useDayCommentCounts(dayId, mode);
 
+  useEffect(() => {
+    if (media.length > 0) {
+      cachedMediaCounts.set(dayId, media.length);
+    }
+  }, [dayId, media.length]);
+
+  const reservedMediaCount = useMemo(
+    () => cachedMediaCounts.get(dayId) ?? DEFAULT_SKELETON_MEDIA_COUNT,
+    [dayId]
+  );
+  const nextDayReservedMediaCount = useMemo(
+    () => Math.max(cachedMediaCounts.get(dayId) ?? 0, NEXT_DAY_PRELOAD_MEDIA_COUNT),
+    [dayId]
+  );
+
   return (
     <>
       <div className="card-media">
-        {mediaLoading ? (
-          <MediaLoadingPreview copy="Hämtar minnen..." />
+        {mediaLoading && showNextDayPreload ? (
+          <NextDayPreloadPreview mediaCount={nextDayReservedMediaCount} />
+        ) : mediaLoading ? (
+          <MediaLoadingPreview copy="Hämtar minnen..." mediaCount={reservedMediaCount} />
         ) : media.length > 0 ? (
           <MediaGrid
             media={media}
@@ -100,20 +168,26 @@ const DaySectionContent: React.FC<DaySectionContentProps> = ({
 const DaySection: React.FC<DaySectionProps> = ({
   day,
   isActive,
-  isAdjacentToActive,
+  isPreviousAdjacent,
+  isNextAdjacent,
   isAdmin,
   onVisible,
   onMediaClick,
+  onSectionRef,
   onUpdateDay,
   onDeleteDay,
   onDeleteMedia,
 }) => {
   const [hasAnimated, setHasAnimated] = useState(false);
-  const [hasActivatedContent, setHasActivatedContent] = useState(isActive || isAdjacentToActive);
+  const [hasActivatedContent, setHasActivatedContent] = useState(
+    isActive || isPreviousAdjacent || isNextAdjacent
+  );
   const [isEditingText, setIsEditingText] = useState(false);
   const [draftText, setDraftText] = useState(day.description || '');
   const [draftLocation, setDraftLocation] = useState(day.location || '');
   const [isSaving, setIsSaving] = useState(false);
+
+  const reservedMediaCount = cachedMediaCounts.get(day.id) ?? DEFAULT_SKELETON_MEDIA_COUNT;
 
   const { ref: activeRef } = useInView({
     rootMargin: '-10% 0px -30% 0px',
@@ -134,23 +208,25 @@ const DaySection: React.FC<DaySectionProps> = ({
     },
   });
 
-  React.useEffect(() => {
-    if (isActive || isAdjacentToActive) {
+  useEffect(() => {
+    if (isActive || isPreviousAdjacent || isNextAdjacent) {
       setHasActivatedContent(true);
     }
-  }, [isActive, isAdjacentToActive]);
+  }, [isActive, isNextAdjacent, isPreviousAdjacent]);
 
   const setRefs = React.useCallback(
     (node: HTMLDivElement | null) => {
       activeRef(node);
       nearViewportRef(node);
+      onSectionRef?.(day.id, node);
     },
-    [activeRef, nearViewportRef]
+    [activeRef, nearViewportRef, onSectionRef, day.id]
   );
 
   const contentMode: DataLoadMode =
-    isActive ? 'live' : hasActivatedContent || isAdjacentToActive ? 'once' : 'off';
+    isActive ? 'live' : hasActivatedContent || isPreviousAdjacent || isNextAdjacent ? 'once' : 'off';
   const shouldMountContent = contentMode !== 'off';
+  const showNextDayPreload = isNextAdjacent && !isActive;
 
   const handleSaveText = async () => {
     if (!onUpdateDay) {
@@ -285,12 +361,13 @@ const DaySection: React.FC<DaySectionProps> = ({
             dayId={day.id}
             mode={contentMode}
             isAdmin={isAdmin}
+            showNextDayPreload={showNextDayPreload}
             onMediaClick={onMediaClick}
             onDeleteMedia={onDeleteMedia}
           />
         ) : (
           <div className="card-media">
-            <DeferredMediaPreview />
+            <DeferredMediaPreview mediaCount={reservedMediaCount} />
           </div>
         )}
       </article>
@@ -299,6 +376,7 @@ const DaySection: React.FC<DaySectionProps> = ({
         .day-wrapper {
           position: relative;
           margin-bottom: 5rem;
+          overflow-anchor: none;
         }
 
         .card-header {
@@ -514,7 +592,8 @@ const DaySection: React.FC<DaySectionProps> = ({
         }
 
         .media-loading-state,
-        .deferred-media-state {
+        .deferred-media-state,
+        .next-day-preload-state {
           display: flex;
           flex-direction: column;
           gap: 0.9rem;
@@ -560,6 +639,54 @@ const DaySection: React.FC<DaySectionProps> = ({
           color: var(--text-dim);
         }
 
+        .next-day-preload-state {
+          padding: 1rem;
+          border-radius: var(--radius-md);
+          border: 1px solid rgba(var(--primary-rgb), 0.12);
+          background:
+            linear-gradient(180deg, rgba(var(--primary-rgb), 0.04) 0%, rgba(var(--primary-rgb), 0.015) 100%),
+            var(--surface-color);
+          box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18);
+        }
+
+        .next-day-loader {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          gap: 0.65rem;
+          padding: 0.5rem 0 0.25rem;
+          text-align: center;
+        }
+
+        .next-day-sakura {
+          font-size: 2rem;
+          color: var(--primary);
+          animation: sakura-spin 3s ease-in-out infinite;
+          filter: drop-shadow(0 0 12px rgba(var(--primary-rgb), 0.2));
+        }
+
+        .next-day-loader-copy {
+          display: flex;
+          flex-direction: column;
+          gap: 0.2rem;
+        }
+
+        .next-day-loader-title,
+        .next-day-loader-subtitle {
+          margin: 0;
+        }
+
+        .next-day-loader-title {
+          color: var(--text-main);
+          font-weight: 600;
+        }
+
+        .next-day-loader-subtitle {
+          color: var(--text-dim);
+          font-size: 0.95rem;
+        }
+
         .loading-state-inline {
           display: flex;
           flex-direction: column;
@@ -580,6 +707,20 @@ const DaySection: React.FC<DaySectionProps> = ({
 
           to {
             transform: rotate(360deg);
+          }
+        }
+
+        @keyframes sakura-spin {
+          0% {
+            transform: rotate(0deg) scale(1);
+          }
+
+          50% {
+            transform: rotate(180deg) scale(1.08);
+          }
+
+          100% {
+            transform: rotate(360deg) scale(1);
           }
         }
 

@@ -12,6 +12,7 @@ import { useAdmin } from './hooks/useAdmin';
 import { useDays } from './hooks/useDays';
 import { useMaintenance } from './hooks/useMaintenance';
 import { useMediaActions } from './hooks/useMediaActions';
+import { useScrollAnchor } from './hooks/useScrollAnchor';
 import { useUserName } from './hooks/useUserName';
 import type { Media } from './types';
 import { DEFAULT_MAP_CENTER, type MapCoordinate } from './utils/mapMedia';
@@ -166,17 +167,26 @@ function App() {
     () => days.findIndex((day) => day.id === activeDayId),
     [days, activeDayId],
   );
+  const previousAdjacentDayId = useMemo(
+    () => (activeDayIndex > 0 ? days[activeDayIndex - 1]?.id ?? null : null),
+    [days, activeDayIndex],
+  );
+  const nextAdjacentDayId = useMemo(
+    () =>
+      activeDayIndex >= 0 && activeDayIndex < days.length - 1
+        ? days[activeDayIndex + 1]?.id ?? null
+        : null,
+    [days, activeDayIndex],
+  );
   const adjacentDayIds = useMemo(() => {
-    if (activeDayIndex < 0) {
-      return new Set<string>();
-    }
-
     return new Set(
-      [days[activeDayIndex - 1]?.id, days[activeDayIndex + 1]?.id].filter(
-        (dayId): dayId is string => Boolean(dayId),
-      ),
+      [previousAdjacentDayId, nextAdjacentDayId].filter((dayId): dayId is string => Boolean(dayId)),
     );
-  }, [days, activeDayIndex]);
+  }, [nextAdjacentDayId, previousAdjacentDayId]);
+  const { registerSectionRef } = useScrollAnchor({
+    activeDayId,
+    observedDayIds: adjacentDayIds,
+  });
 
   const selectedMedia = selectedMediaIndex !== null ? lightboxMedia[selectedMediaIndex] ?? null : null;
   const nextMediaItem = selectedMediaIndex !== null ? lightboxMedia[selectedMediaIndex + 1] ?? null : null;
@@ -411,7 +421,9 @@ function App() {
                       key={day.id}
                       day={day}
                       isActive={activeDayId === day.id}
-                      isAdjacentToActive={adjacentDayIds.has(day.id)}
+                      isPreviousAdjacent={previousAdjacentDayId === day.id}
+                      isNextAdjacent={nextAdjacentDayId === day.id}
+                      onSectionRef={registerSectionRef}
                       isAdmin={isAdmin}
                       canPost={canPost}
                       authorizationError={authorizationError}
@@ -725,6 +737,10 @@ function App() {
           letter-spacing: 0.05em;
           font-style: italic;
           animation: pulse-opacity 2s ease-in-out infinite;
+        }
+
+        .days-list {
+          overflow-anchor: none;
         }
 
         .maintenance-section {

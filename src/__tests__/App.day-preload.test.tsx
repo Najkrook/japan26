@@ -116,12 +116,14 @@ vi.mock('../components/DaySection', () => ({
   default: ({
     day,
     isActive,
-    isAdjacentToActive,
+    isPreviousAdjacent,
+    isNextAdjacent,
     onVisible,
   }: {
     day: Day;
     isActive: boolean;
-    isAdjacentToActive: boolean;
+    isPreviousAdjacent: boolean;
+    isNextAdjacent: boolean;
     onVisible: (dayId: string) => void;
   }) => (
     <button
@@ -129,7 +131,9 @@ vi.mock('../components/DaySection', () => ({
       data-testid={`day-section-${day.id}`}
       onClick={() => onVisible(day.id)}
     >
-      {day.id}:{isActive ? 'active' : 'inactive'}:{isAdjacentToActive ? 'adjacent' : 'not-adjacent'}
+      {`${day.id}:${isActive ? 'active' : 'inactive'}:${
+        isPreviousAdjacent ? 'previous-adjacent' : isNextAdjacent ? 'next-adjacent' : 'not-adjacent'
+      }`}
     </button>
   ),
 }));
@@ -170,7 +174,7 @@ afterEach(() => {
 });
 
 describe('App adjacent day preloading', () => {
-  it('marks the previous and next days as adjacent when a day becomes active', () => {
+  it('marks the previous and next days separately when a day becomes active', () => {
     render(<App />);
 
     expect(screen.getByTestId('day-section-day-1').textContent).toContain('not-adjacent');
@@ -180,7 +184,7 @@ describe('App adjacent day preloading', () => {
     fireEvent.click(screen.getByTestId('day-section-day-2'));
 
     expect(screen.getByTestId('day-section-day-2').textContent).toContain('active:not-adjacent');
-    expect(screen.getByTestId('day-section-day-1').textContent).toContain('inactive:adjacent');
-    expect(screen.getByTestId('day-section-day-3').textContent).toContain('inactive:adjacent');
+    expect(screen.getByTestId('day-section-day-1').textContent).toContain('inactive:previous-adjacent');
+    expect(screen.getByTestId('day-section-day-3').textContent).toContain('inactive:next-adjacent');
   });
 });

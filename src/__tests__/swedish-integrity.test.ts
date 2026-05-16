@@ -75,7 +75,7 @@ describe('Swedish integrity', () => {
 
     expect(
       findings,
-      `Found suspicious mojibake or replacement characters:\n${findings.join('\n')}`,
+      `Found suspicious mojibake or replacement characters:\n${findings.join('\n')}`
     ).toHaveLength(0);
   });
 
@@ -87,7 +87,7 @@ describe('Swedish integrity', () => {
 
       expect(
         content.includes(sentinel.expected) || content.includes(escapedVariant),
-        `${sentinel.file} should contain ${JSON.stringify(sentinel.expected)} as text or unicode escapes.`,
+        `${sentinel.file} should contain ${JSON.stringify(sentinel.expected)} as text or unicode escapes.`
       ).toBe(true);
     }
   });

@@ -80,7 +80,8 @@ const renderSection = (overrides: Partial<React.ComponentProps<typeof DaySection
     <DaySection
       day={dayFixture}
       isActive={false}
-      isAdjacentToActive={false}
+      isPreviousAdjacent={false}
+      isNextAdjacent={false}
       isAdmin={false}
       canPost={false}
       authorizationError={null}
@@ -134,12 +135,77 @@ describe('DaySection', () => {
     expect(mockUseDayCommentCounts).not.toHaveBeenCalled();
   });
 
-  it('uses once-mode when the day is adjacent to the active day', () => {
-    renderSection({ isAdjacentToActive: true });
+  it('uses once-mode when the day is previous-adjacent to the active day', () => {
+    renderSection({ isPreviousAdjacent: true });
 
     expect(screen.getByTestId('media-grid')).toBeTruthy();
     expect(mockUseMedia).toHaveBeenLastCalledWith('day-1', 'once');
     expect(mockUseDayCommentCounts).toHaveBeenLastCalledWith('day-1', 'once');
+  });
+
+  it('shows the larger sakura preload state for the next day while media is loading', () => {
+    mockUseMedia.mockImplementation((_dayId: string, mode: DataLoadMode) => ({
+      media: [],
+      loading: mode !== 'off',
+      error: null,
+    }));
+
+    renderSection({ isNextAdjacent: true });
+
+    expect(screen.getByTestId('next-day-preload-state')).toBeTruthy();
+    expect(screen.getByText('Förbereder nästa dag...')).toBeTruthy();
+    expect(screen.getByText('Laddar bilderna innan du scrollar vidare.')).toBeTruthy();
+    expect(screen.getAllByTestId('media-skeleton-tile')).toHaveLength(9);
+    expect(mockUseMedia).toHaveBeenLastCalledWith('day-1', 'once');
+    expect(mockUseDayCommentCounts).toHaveBeenLastCalledWith('day-1', 'once');
+  });
+
+  it('swaps from next-day preload to the media grid once loading finishes', () => {
+    mockUseMedia.mockImplementation((_dayId: string, mode: DataLoadMode) => ({
+      media: [],
+      loading: mode !== 'off',
+      error: null,
+    }));
+
+    const { rerender } = renderSection({ isNextAdjacent: true });
+    expect(screen.getByTestId('next-day-preload-state')).toBeTruthy();
+
+    mockUseMedia.mockImplementation((_dayId: string, mode: DataLoadMode) => ({
+      media: mode === 'off' ? [] : mediaFixture,
+      loading: false,
+      error: null,
+    }));
+
+    rerender(
+      <DaySection
+        day={dayFixture}
+        isActive={false}
+        isPreviousAdjacent={false}
+        isNextAdjacent={true}
+        isAdmin={false}
+        canPost={false}
+        authorizationError={null}
+        onVisible={vi.fn()}
+        onMediaClick={vi.fn()}
+      />
+    );
+
+    expect(screen.queryByTestId('next-day-preload-state')).toBeNull();
+    expect(screen.getByTestId('media-grid')).toBeTruthy();
+  });
+
+  it('keeps the lighter loading state for the previous day while media is loading', () => {
+    mockUseMedia.mockImplementation((_dayId: string, mode: DataLoadMode) => ({
+      media: [],
+      loading: mode !== 'off',
+      error: null,
+    }));
+
+    renderSection({ isPreviousAdjacent: true });
+
+    expect(screen.getByText('Hämtar minnen...')).toBeTruthy();
+    expect(screen.queryByTestId('next-day-preload-state')).toBeNull();
+    expect(screen.getAllByTestId('media-skeleton-tile')).toHaveLength(1);
   });
 
   it('activates content with once-mode when the day enters the preload zone', () => {
@@ -166,7 +232,8 @@ describe('DaySection', () => {
       <DaySection
         day={dayFixture}
         isActive={false}
-        isAdjacentToActive={false}
+        isPreviousAdjacent={false}
+        isNextAdjacent={false}
         isAdmin={false}
         canPost={false}
         authorizationError={null}
@@ -206,7 +273,8 @@ describe('DaySection', () => {
       <DaySection
         day={dayFixture}
         isActive={false}
-        isAdjacentToActive={false}
+        isPreviousAdjacent={false}
+        isNextAdjacent={false}
         isAdmin={false}
         canPost={false}
         authorizationError={null}
@@ -218,5 +286,33 @@ describe('DaySection', () => {
     expect(screen.getByTestId('media-grid')).toBeTruthy();
     expect(mockUseMedia).toHaveBeenLastCalledWith('day-1', 'once');
     expect(mockUseDayCommentCounts).toHaveBeenLastCalledWith('day-1', 'once');
+  });
+
+  it('reuses the cached media layout to reserve a closer placeholder height', () => {
+    const cachedDay: Day = {
+      ...dayFixture,
+      id: 'day-cached',
+      title: 'Kyoto',
+    };
+    const cachedMedia: Media[] = Array.from({ length: 6 }, (_, index) => ({
+      ...mediaFixture[0],
+      id: `cached-${index}`,
+      dayId: 'day-cached',
+    }));
+
+    mockUseMedia.mockImplementation((dayId: string, mode: DataLoadMode) => ({
+      media: dayId === 'day-cached' && mode !== 'off' ? cachedMedia : mode === 'off' ? [] : mediaFixture,
+      loading: false,
+      error: null,
+    }));
+
+    const firstRender = renderSection({ day: cachedDay, isActive: true });
+    expect(screen.getByTestId('media-grid')).toBeTruthy();
+    firstRender.unmount();
+
+    renderSection({ day: cachedDay });
+
+    expect(screen.getByText('Bilderna laddas när du närmar dig dagen.')).toBeTruthy();
+    expect(screen.getAllByTestId('media-skeleton-tile')).toHaveLength(7);
   });
 });
