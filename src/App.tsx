@@ -263,7 +263,7 @@ function App() {
               className="hero-kanji-bg"
               style={isMobilePerformanceMode ? undefined : { opacity: kanjiOpacity }}
             >
-              Japan Journal
+              日本
             </motion.div>
             <h1 className="hero-title-main">Japan</h1>
             <motion.div
@@ -554,6 +554,7 @@ function App() {
           z-index: 1;
           font-weight: 700;
           letter-spacing: 0.1em;
+          opacity: 0.05;
         }
 
         .hero-year-main {
