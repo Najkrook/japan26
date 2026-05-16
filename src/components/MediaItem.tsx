@@ -86,14 +86,11 @@ const MediaItem: React.FC<MediaItemProps> = ({ item, isAdmin, commentCount, onCl
           </div>
         )}
 
-        <div className="item-overlay">
-          <div className="item-info">
-            <div className="comment-badge">
-              <MessageCircle size={14} />
-              <span>{commentCount}</span>
-            </div>
+        {commentCount > 0 && (
+          <div className="top-right-comment-badge" title={`${commentCount} kommentar${commentCount > 1 ? 'er' : ''}`}>
+            +{commentCount}
           </div>
-        </div>
+        )}
 
         {isAdmin && (
           <button
@@ -195,39 +192,24 @@ const MediaItem: React.FC<MediaItemProps> = ({ item, isAdmin, commentCount, onCl
           box-shadow: 0 4px 12px rgba(188, 0, 45, 0.3);
         }
 
-        .item-overlay {
+        .top-right-comment-badge {
           position: absolute;
-          bottom: 0;
-          left: 0;
-          right: 0;
-          padding: 1rem;
-          background: linear-gradient(transparent, rgba(0, 0, 0, 0.6));
-          opacity: 0;
-          transition: opacity 0.3s;
-        }
-
-        .media-item-container:hover .item-overlay {
-          opacity: 1;
-        }
-
-        .comment-badge {
-          display: flex;
-          align-items: center;
-          gap: 0.25rem;
+          top: 0.5rem;
+          right: 0.5rem;
           background: var(--primary);
+          color: white;
+          font-weight: 700;
+          font-size: 0.85rem;
           padding: 0.25rem 0.6rem;
           border-radius: var(--radius-full);
-          font-size: 0.8rem;
-          font-weight: 600;
-          color: white;
-          width: max-content;
-          box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+          z-index: 4;
         }
 
         .item-delete-btn {
           position: absolute;
           top: 0.5rem;
-          right: 0.5rem;
+          left: 0.5rem;
           background: rgba(255, 255, 255, 0.9);
           backdrop-filter: blur(4px);
           color: var(--primary);
