@@ -170,12 +170,26 @@ describe('MapTab', () => {
     mockUseAllMedia.mockReturnValue({
       media: [],
       loading: false,
-      error: 'Kunde inte hÃƒÂ¤mta media fÃƒÂ¶r kartan.',
+      error: 'Kunde inte hamta media for kartan.',
     });
 
     render(<MapTab />);
 
-    expect(screen.getByTestId('map-error-state').textContent).toContain('Kunde inte hÃƒÂ¤mta media fÃƒÂ¶r kartan.');
+    expect(screen.getByTestId('map-error-state').textContent).toContain(
+      'Kunde inte hamta media for kartan.'
+    );
+  });
+
+  it('loads map media as a one-time fetch instead of a live subscription', () => {
+    mockUseAllMedia.mockReturnValue({
+      media: geoMedia,
+      loading: false,
+      error: null,
+    });
+
+    render(<MapTab />);
+
+    expect(mockUseAllMedia).toHaveBeenCalledWith({ enabled: true, live: false, limit: 1000 });
   });
 
   it('fits the map to all geo-tagged day stops and filters out media without coordinates', () => {
@@ -193,7 +207,7 @@ describe('MapTab', () => {
         [34.69, 135.5],
         [35.68, 139.76],
       ],
-      { padding: [32, 32], maxZoom: 13 },
+      { padding: [32, 32], maxZoom: 13 }
     );
   });
 

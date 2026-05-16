@@ -124,9 +124,9 @@ function App() {
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.hidden) {
-        document.title = 'Minnen fran Japan...';
+        document.title = 'Minnen från Japan... 🌸';
       } else {
-        document.title = 'Jojje i Japan';
+        document.title = 'Jojje i Japan ⛩️';
       }
     };
 
@@ -185,12 +185,12 @@ function App() {
       if (authorizedProfile) {
         setShowAdminLogin(false);
       } else {
-        setLoginError('Saknar behorighet.');
+        setLoginError('Saknar behörighet.');
       }
     } catch (err: unknown) {
       const firebaseError = err as { code?: string; message?: string };
       console.error('[Auth] Login failed:', firebaseError.code, firebaseError.message);
-      setLoginError(`Inloggning misslyckades: ${firebaseError.code ?? 'Okant fel'}`);
+      setLoginError(`Inloggning misslyckades: ${firebaseError.code ?? 'Okänt fel'}`);
     } finally {
       setLoginLoading(false);
     }
@@ -272,9 +272,9 @@ function App() {
             >
               2026
             </motion.div>
-            <p className="hero-tagline">Folj aventyret i Japan</p>
+            <p className="hero-tagline">Följ äventyret i Japan 🌸🗾🍙</p>
             <p className="hero-description-small">
-              En liten journal fran resan, fylld med bilder, platser och halsningar.
+              En liten journal från resan, fylld med bilder, platser och hälsningar.
             </p>
           </motion.div>
 
@@ -317,9 +317,9 @@ function App() {
                         <div className="maintenance-section">
                           <div className="maintenance-header">
                             <AlertTriangle size={16} className="warning-icon" />
-                            <h4>Systemunderhall</h4>
+                            <h4>Systemunderhåll</h4>
                           </div>
-                          <p>Skanna efter media som inte langre hor till en dag innan du rensar.</p>
+                          <p>Skanna efter media som inte längre hör till en dag innan du rensar.</p>
                           <div className="maintenance-actions">
                             <button
                               className="cleanup-btn secondary"
@@ -335,20 +335,20 @@ function App() {
                               <button
                                 className="cleanup-btn"
                                 onClick={() => {
-                                  if (window.confirm(`Vill du permanent radera ${orphanedMedia.length} bilder? Detta kan inte angras.`)) {
+                                  if (window.confirm(`Vill du permanent radera ${orphanedMedia.length} bilder? Detta kan inte ångras.`)) {
                                     void cleanupOrphanedMedia();
                                   }
                                 }}
                                 disabled={isCleaning}
                               >
                                 <Trash2 size={16} />
-                                {isCleaning ? 'Rensar...' : `Rensa ${orphanedMedia.length} foraldralosa bilder`}
+                                {isCleaning ? 'Rensar...' : `Rensa ${orphanedMedia.length} föräldralösa bilder`}
                               </button>
                             )}
                           </div>
                           {scanError && <p className="maintenance-error">{scanError}</p>}
                           {orphanedMedia.length > 0 && (
-                            <p>Hittade {orphanedMedia.length} foraldralosa bilder som saknar en dag.</p>
+                            <p>Hittade {orphanedMedia.length} föräldralösa bilder som saknar en dag.</p>
                           )}
                         </div>
                       )}
@@ -359,9 +359,9 @@ function App() {
                             <>âœ… {lastCleanCount} bilder har raderats permanent.</>
                           ) : (
                             <>
-                              {lastCleanCount} raderade, {lastFailCount} misslyckades.
+                              ⚠️ {lastCleanCount} raderade, {lastFailCount} misslyckades.
                               <span style={{ display: 'block', fontSize: '0.75rem', marginTop: '0.25rem', fontWeight: 400 }}>
-                                Prova att rensa igen eller kontakta support om felet kvarstar.
+                                Prova att rensa igen eller kontakta support om felet kvarstår.
                               </span>
                             </>
                           )}
@@ -386,7 +386,7 @@ function App() {
               {daysLoading ? (
                 <div className="ethereal-loading-state fade-in">
                   <div className="sakura-spinner">*</div>
-                  <p>Hamtar tidslinjen...</p>
+                  <p>Hämtar tidslinjen...</p>
                 </div>
               ) : days.length > 0 ? (
                 <div className="days-list">
@@ -411,14 +411,14 @@ function App() {
                   <div className="empty-icon-container">
                     <ImageIcon size={32} />
                   </div>
-                  <h2>Ingen resa an</h2>
-                  <p>Borja med att ladda upp bilder for att starta din journal.</p>
+                  <h2>Ingen resa än</h2>
+                  <p>Börja med att ladda upp bilder för att starta din journal.</p>
                   <button
                     className="add-first-memory-btn"
                     onClick={() => setIsAdminPanelOpen(true)}
                   >
                     <ImageIcon size={18} />
-                    Lagg till forsta minnet
+                    Lägg till första minnet
                   </button>
                 </div>
               )}

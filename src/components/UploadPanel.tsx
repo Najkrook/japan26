@@ -85,7 +85,7 @@ const MOBILE_PREPARE_CONCURRENCY = 1;
 const DESKTOP_PREPARE_CONCURRENCY = 2;
 
 const STATUS_LABELS: Record<UploadStatus, string> = {
-  preparing: 'Forbereder',
+  preparing: 'Förbereder',
   queued: 'Klar',
   prepareFailed: 'Fastnade',
   uploading: 'Laddar upp',
@@ -147,17 +147,17 @@ const isSupportedFile = (file: File, kind: MediaKind): boolean => {
 
 const validateFileForUpload = (file: File, currentQueueCount: number, selectionIndex: number): string | null => {
   if (currentQueueCount + selectionIndex >= MAX_QUEUE_ITEMS) {
-    return `Koen ar full. Max ${MAX_QUEUE_ITEMS} filer samtidigt.`;
+    return `Kön är full. Max ${MAX_QUEUE_ITEMS} filer samtidigt.`;
   }
 
   const kind = detectMediaKind(file);
   if (!isSupportedFile(file, kind)) {
-    return 'Filtypen stod inte pa listan over stodda uppladdningar.';
+    return 'Filtypen stöds inte.';
   }
 
   const sizeLimit = kind === 'video' ? MAX_VIDEO_BYTES : MAX_PHOTO_BYTES;
   if (file.size > sizeLimit) {
-    return `Filen ar for stor. Max ${formatFileSize(sizeLimit)} for ${kind === 'video' ? 'video' : 'foto'}.`;
+    return `Filen är för stor. Max ${formatFileSize(sizeLimit)} för ${kind === 'video' ? 'video' : 'foto'}.`;
   }
 
   return null;
@@ -323,7 +323,7 @@ const UploadPanel: React.FC<UploadPanelProps> = ({ ensureDay, onUploadComplete }
               error:
                 preparationError instanceof Error
                   ? preparationError.message
-                  : 'Kunde inte forbereda filen.',
+                  : 'Kunde inte förbereda filen.',
             }));
           }
         }),
@@ -346,7 +346,7 @@ const UploadPanel: React.FC<UploadPanelProps> = ({ ensureDay, onUploadComplete }
 
     const uploaderUid = auth.currentUser?.uid;
     if (!uploaderUid) {
-      setError('Du maste vara inloggad for att ladda upp media.');
+      setError('Du måste vara inloggad för att ladda upp media.');
       return;
     }
 
@@ -372,7 +372,7 @@ const UploadPanel: React.FC<UploadPanelProps> = ({ ensureDay, onUploadComplete }
         dayResolution.set(dateKey, { dayId });
       } catch (dayError) {
         dayResolution.set(dateKey, {
-          error: dayError instanceof Error ? dayError.message : 'Kunde inte skapa dagen for uppladdningen.',
+          error: dayError instanceof Error ? dayError.message : 'Kunde inte skapa dagen för uppladdningen.',
         });
       }
     }
@@ -388,7 +388,7 @@ const UploadPanel: React.FC<UploadPanelProps> = ({ ensureDay, onUploadComplete }
             ...currentItem,
             status: 'uploadFailed',
             progress: 0,
-            error: dayResult?.error ?? 'Kunde inte hitta maldagen for filen.',
+            error: dayResult?.error ?? 'Kunde inte hitta måldagen för filen.',
           }));
           continue;
         }
@@ -559,7 +559,7 @@ const UploadPanel: React.FC<UploadPanelProps> = ({ ensureDay, onUploadComplete }
         {isUploading ? (
           <div className="uploading-state">
             <Loader2 className="spinner" size={32} />
-            <p>Laddar upp filko...</p>
+            <p>Laddar upp filkö...</p>
           </div>
         ) : (
           <div className="idle-state">
@@ -567,8 +567,8 @@ const UploadPanel: React.FC<UploadPanelProps> = ({ ensureDay, onUploadComplete }
               <ImageIcon size={32} />
               <Video size={32} />
             </div>
-            <p>Tryck for att valja bilder och videor</p>
-            <span>HEIC konverteras automatiskt och datum lases i forsta hand fran metadata.</span>
+            <p>Tryck för att välja bilder och videor</p>
+            <span>HEIC konverteras automatiskt och datum läses i första hand från metadata.</span>
           </div>
         )}
       </div>
@@ -634,7 +634,7 @@ const UploadPanel: React.FC<UploadPanelProps> = ({ ensureDay, onUploadComplete }
                       disabled={isUploading}
                     >
                       <RefreshCcw size={14} />
-                      Forsok igen
+                      Försök igen
                     </button>
                   )}
                   <button
@@ -667,7 +667,7 @@ const UploadPanel: React.FC<UploadPanelProps> = ({ ensureDay, onUploadComplete }
       {batchSummary && (
         <div className={`batch-summary ${batchSummary.failureCount > 0 ? 'has-failures' : 'all-good'}`}>
           {batchSummary.failureCount > 0
-            ? `${batchSummary.successCount} klara, ${batchSummary.failureCount} behovde ett nytt forsok.`
+            ? `${batchSummary.successCount} klara, ${batchSummary.failureCount} behövde ett nytt försök.`
             : `${batchSummary.successCount} filer laddades upp utan fel.`}
         </div>
       )}

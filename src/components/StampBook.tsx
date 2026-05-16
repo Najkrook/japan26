@@ -23,35 +23,35 @@ interface Stamp {
 
 const PREDEFINED_STAMPS: Stamp[] = [
   {
-    id: 'tokyo', name: 'Tokyo', kanji: 'T', color: '#bc002d',
+    id: 'tokyo', name: 'Tokyo', kanji: '\u6771', color: '#bc002d',
     center: { lat: 35.6895, lng: 139.6917 }, radiusKm: 15,
   },
   {
-    id: 'kyoto', name: 'Kyoto', kanji: 'äº¬', color: '#1a237e',
+    id: 'kyoto', name: 'Kyoto', kanji: '\u4eac', color: '#1a237e',
     center: { lat: 35.0116, lng: 135.7681 }, radiusKm: 10,
   },
   {
-    id: 'osaka', name: 'Osaka', kanji: 'é˜ª', color: '#1b5e20',
+    id: 'osaka', name: 'Osaka', kanji: '\u962a', color: '#1b5e20',
     center: { lat: 34.6937, lng: 135.5023 }, radiusKm: 12,
   },
   {
-    id: 'okinawa', name: 'Okinawa', kanji: 'O', color: '#0097a7',
+    id: 'okinawa', name: 'Okinawa', kanji: '\u6c96', color: '#0097a7',
     center: { lat: 26.2124, lng: 127.6809 }, radiusKm: 40,
   },
   {
-    id: 'nara', name: 'Nara', kanji: 'å¥ˆ', color: '#5d4037',
+    id: 'nara', name: 'Nara', kanji: '\u5948', color: '#5d4037',
     center: { lat: 34.6851, lng: 135.8048 }, radiusKm: 8,
   },
   {
-    id: 'kamakura', name: 'Kamakura', kanji: 'éŽŒ', color: '#004d40',
+    id: 'kamakura', name: 'Kamakura', kanji: '\u938c', color: '#004d40',
     center: { lat: 35.3190, lng: 139.5467 }, radiusKm: 7,
   },
   {
-    id: 'nikko', name: 'Nikko', kanji: 'N', color: '#e65100',
+    id: 'nikko', name: 'Nikko', kanji: '\u65e5', color: '#e65100',
     center: { lat: 36.7199, lng: 139.6983 }, radiusKm: 12,
   },
   {
-    id: 'uji', name: 'Uji', kanji: 'å®‡', color: '#33691e',
+    id: 'uji', name: 'Uji', kanji: '\u5b87', color: '#33691e',
     center: { lat: 34.8892, lng: 135.8077 }, radiusKm: 6,
   },
 ];
@@ -119,7 +119,7 @@ const StampBook: React.FC<StampBookProps> = ({ isOpen, onClose, days }) => {
                 </div>
                 <div className="header-text">
                   <h2>Eki-Stamp Samling</h2>
-                  <p>Minnen fran platser du besokt i Japan</p>
+                  <p>Minnen från platser du besökt i Japan</p>
                 </div>
                 <button className="close-btn" onClick={onClose}>
                   <X size={24} />
@@ -129,7 +129,7 @@ const StampBook: React.FC<StampBookProps> = ({ isOpen, onClose, days }) => {
               {loading ? (
                 <div className="stamp-loading-state">
                   <Loader2 className="spinner" size={28} />
-                  <p>Hamtar platser...</p>
+                  <p>Hämtar platser...</p>
                 </div>
               ) : (
                 <>
@@ -160,14 +160,14 @@ const StampBook: React.FC<StampBookProps> = ({ isOpen, onClose, days }) => {
                   </div>
 
                   <div className="stamp-book-footer">
-                    <p>Besok fler platser for att lasa upp fler stamplar</p>
+                    <p>Besök fler platser för att låsa upp fler stämplar</p>
                     <div className="progress-bar">
                       <div
                         className="progress-fill"
                         style={{ width: `${(unlockedLocations.length / PREDEFINED_STAMPS.length) * 100}%` }}
                       />
                     </div>
-                    <span className="progress-text">{unlockedLocations.length} av {PREDEFINED_STAMPS.length} stamplar samlade</span>
+                    <span className="progress-text">{unlockedLocations.length} av {PREDEFINED_STAMPS.length} stämplar samlade</span>
                   </div>
                 </>
               )}

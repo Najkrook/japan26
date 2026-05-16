@@ -217,7 +217,7 @@ const loadVideoResource = (file: File): Promise<LoadedVideoResource> =>
     const objectUrl = URL.createObjectURL(file);
     const timeout = window.setTimeout(() => {
       cleanup();
-      reject(new Error('Videoinlasning tog for lang tid.'));
+      reject(new Error('Videoinläsning tog för lång tid.'));
     }, 12000);
 
     const cleanup = createObjectUrlCleanup(objectUrl, () => {

@@ -281,7 +281,7 @@ const MapTab: React.FC<MapTabProps> = ({
   onMediaOpen,
   onViewChange,
 }) => {
-  const { media, loading, error } = useAllMedia();
+  const { media, loading, error } = useAllMedia({ enabled: true, live: false, limit: 1000 });
   const journeyStops = React.useMemo(() => getJourneyPath(media), [media]);
   const bounds = React.useMemo(() => getMapBounds(journeyStops), [journeyStops]);
   const journeyCoordinates = React.useMemo(

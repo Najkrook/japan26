@@ -46,7 +46,7 @@ const DaySectionContent: React.FC<DaySectionContentProps> = ({
         {mediaLoading ? (
           <div className="loading-state-inline">
             <Loader2 className="spinner" size={24} />
-            <p>Hamtar minnen...</p>
+            <p>Hämtar minnen...</p>
           </div>
         ) : media.length > 0 ? (
           <MediaGrid
@@ -64,7 +64,7 @@ const DaySectionContent: React.FC<DaySectionContentProps> = ({
             <div className="empty-icon-small">
               <ImageIcon size={32} />
             </div>
-            <p>{mediaError ?? 'Inga bilder an.'}</p>
+            <p>{mediaError ?? 'Inga bilder än.'}</p>
           </div>
         )}
       </div>
@@ -131,7 +131,7 @@ const DaySection: React.FC<DaySectionProps> = ({
   };
 
   const handleDeleteDay = async () => {
-    if (onDeleteDay && window.confirm('Ar du saker pa att du vill ta bort hela denna dag? Detta kan inte angras.')) {
+    if (onDeleteDay && window.confirm('Är du säker på att du vill ta bort hela denna dag? Detta kan inte ångras.')) {
       await onDeleteDay(day.id);
     }
   };
@@ -139,7 +139,7 @@ const DaySection: React.FC<DaySectionProps> = ({
   const dateObj = day.date;
   const monthNames = ['Januari', 'Februari', 'Mars', 'April', 'Maj', 'Juni', 'Juli', 'Augusti', 'September', 'Oktober', 'November', 'December'];
   const dateStr = `${dateObj.getDate()} ${monthNames[dateObj.getMonth()]}`;
-  const locationStr = day.location ? ` - ${day.location}` : '';
+  const locationStr = day.location ? ` — ${day.location}` : '';
   const dateFormatted = `${dateStr}${locationStr}`;
   const defaultTitle = formatDateSwedish(day.date);
   const isDefaultOrSimilar =
@@ -185,7 +185,7 @@ const DaySection: React.FC<DaySectionProps> = ({
               <textarea
                 value={draftText}
                 onChange={(event) => setDraftText(event.target.value)}
-                placeholder="Skriv nagot om dagen..."
+                placeholder="Skriv något om dagen..."
                 className="editor-textarea"
                 rows={4}
                 disabled={isSaving}
@@ -218,7 +218,7 @@ const DaySection: React.FC<DaySectionProps> = ({
                   title="Redigera text"
                 >
                   <Edit3 size={16} />
-                  <span>{day.description ? 'Redigera text' : 'Skriv nagot om dagen...'}</span>
+                  <span>{day.description ? 'Redigera text' : 'Skriv något om dagen...'}</span>
                 </button>
               )}
             </div>
@@ -237,7 +237,7 @@ const DaySection: React.FC<DaySectionProps> = ({
           <div className="card-media">
             <div className="deferred-media-state">
               <ImageIcon size={24} />
-              <p>Media laddas nar kortet kommer narmare.</p>
+              <p>Media laddas när kortet kommer närmare.</p>
             </div>
           </div>
         )}
