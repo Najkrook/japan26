@@ -274,7 +274,8 @@ function App() {
             </motion.div>
             <p className="hero-tagline">Följ äventyret i Japan 🌸🗾🍙</p>
             <p className="hero-description-small">
-              En liten journal från resan, fylld med bilder, platser och hälsningar.
+              「日本語がめちゃくちゃ上手なのか、それとも翻訳ツールの使い方を知ってるのか、<br />どっちにしても盛大な拍手ものです！<br />
+              頭いいってわかるように、ドヤ顔の絵文字を送ってね ;)」
             </p>
           </motion.div>
 

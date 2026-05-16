@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Image as ImageIcon, MessageCircle, Play, X } from 'lucide-react';
+import { Image as ImageIcon, Play, X } from 'lucide-react';
 import type { Media } from '../types';
 import { preloadImageUrl } from '../utils/imagePreload';
 
