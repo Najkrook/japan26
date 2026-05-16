@@ -21,6 +21,7 @@ const {
   mockCreateThumbnail,
   mockDetectMediaKind,
   mockExtractCapturedAt,
+  mockPreparePhotoArtifacts,
   mockReadMediaDimensions,
 } = vi.hoisted(() => ({
   mockCollection: vi.fn(),
@@ -39,6 +40,7 @@ const {
   mockCreateThumbnail: vi.fn(),
   mockDetectMediaKind: vi.fn(),
   mockExtractCapturedAt: vi.fn(),
+  mockPreparePhotoArtifacts: vi.fn(),
   mockReadMediaDimensions: vi.fn(),
 }));
 
@@ -77,6 +79,7 @@ vi.mock('../utils/mediaProcessing', () => ({
   createThumbnail: mockCreateThumbnail,
   detectMediaKind: mockDetectMediaKind,
   extractCapturedAt: mockExtractCapturedAt,
+  preparePhotoArtifacts: mockPreparePhotoArtifacts,
   readMediaDimensions: mockReadMediaDimensions,
 }));
 
@@ -192,6 +195,11 @@ beforeEach(() => {
   mockDetectMediaKind.mockReset();
   mockDetectMediaKind.mockReturnValue('photo');
   mockExtractCapturedAt.mockReset();
+  mockPreparePhotoArtifacts.mockReset();
+  mockPreparePhotoArtifacts.mockResolvedValue({
+    dimensions: { width: 1600, height: 900 },
+    thumbnailBlob: new Blob(['thumb'], { type: 'image/jpeg' }),
+  });
   mockReadMediaDimensions.mockReset();
   mockReadMediaDimensions.mockResolvedValue({ width: 1600, height: 900 });
 });
@@ -348,5 +356,56 @@ describe('UploadPanel lifecycle', () => {
     const firstDocRef = mockSetDoc.mock.calls[0][0] as { id: string };
     const secondDocRef = mockSetDoc.mock.calls[1][0] as { id: string };
     expect(firstDocRef.id).toBe(secondDocRef.id);
+  });
+
+  it('limits file preparation to one item at a time on coarse-pointer devices', async () => {
+    Object.defineProperty(window, 'matchMedia', {
+      configurable: true,
+      writable: true,
+      value: vi.fn().mockImplementation((query: string) => ({
+        matches: query === '(pointer: coarse)',
+        media: query,
+        onchange: null,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      })),
+    });
+
+    const files = [
+      new File(['a'], 'tokyo-1.jpg', { type: 'image/jpeg' }),
+      new File(['b'], 'tokyo-2.jpg', { type: 'image/jpeg' }),
+      new File(['c'], 'tokyo-3.jpg', { type: 'image/jpeg' }),
+    ];
+    let activePreparations = 0;
+    let maxPreparations = 0;
+
+    mockExtractCapturedAt.mockResolvedValue({
+      capturedAt: new Date('2026-04-15T12:00:00Z'),
+      source: 'fallback',
+      location: undefined,
+    });
+    mockPreparePhotoArtifacts.mockImplementation(async () => {
+      activePreparations += 1;
+      maxPreparations = Math.max(maxPreparations, activePreparations);
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      activePreparations -= 1;
+      return {
+        dimensions: { width: 1600, height: 900 },
+        thumbnailBlob: new Blob(['thumb'], { type: 'image/jpeg' }),
+      };
+    });
+
+    renderUploadPanel();
+
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    fireEvent.change(input, { target: { files } });
+
+    await screen.findByRole('button', { name: 'Ladda upp 3 filer' });
+
+    expect(mockPreparePhotoArtifacts).toHaveBeenCalledTimes(3);
+    expect(maxPreparations).toBe(1);
   });
 });

@@ -1,14 +1,14 @@
 import React from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { X, Book } from 'lucide-react';
+import { AnimatePresence, motion } from 'framer-motion';
+import { Book, Loader2, X } from 'lucide-react';
+import { useAllMedia } from '../hooks/useAllMedia';
+import type { Day } from '../types';
 import { isWithinRadius } from '../utils/geoUtils';
-import type { Day, Media } from '../types';
 
 interface StampBookProps {
   isOpen: boolean;
   onClose: () => void;
   days: Day[];
-  media: Media[];
 }
 
 interface Stamp {
@@ -22,42 +22,43 @@ interface Stamp {
 }
 
 const PREDEFINED_STAMPS: Stamp[] = [
-  { 
-    id: 'tokyo', name: 'Tokyo', kanji: '東', color: '#bc002d',
-    center: { lat: 35.6895, lng: 139.6917 }, radiusKm: 15
+  {
+    id: 'tokyo', name: 'Tokyo', kanji: 'T', color: '#bc002d',
+    center: { lat: 35.6895, lng: 139.6917 }, radiusKm: 15,
   },
-  { 
-    id: 'kyoto', name: 'Kyoto', kanji: '京', color: '#1a237e',
-    center: { lat: 35.0116, lng: 135.7681 }, radiusKm: 10
+  {
+    id: 'kyoto', name: 'Kyoto', kanji: 'äº¬', color: '#1a237e',
+    center: { lat: 35.0116, lng: 135.7681 }, radiusKm: 10,
   },
-  { 
-    id: 'osaka', name: 'Osaka', kanji: '阪', color: '#1b5e20',
-    center: { lat: 34.6937, lng: 135.5023 }, radiusKm: 12
+  {
+    id: 'osaka', name: 'Osaka', kanji: 'é˜ª', color: '#1b5e20',
+    center: { lat: 34.6937, lng: 135.5023 }, radiusKm: 12,
   },
-  { 
-    id: 'okinawa', name: 'Okinawa', kanji: '沖', color: '#0097a7',
-    center: { lat: 26.2124, lng: 127.6809 }, radiusKm: 40
+  {
+    id: 'okinawa', name: 'Okinawa', kanji: 'O', color: '#0097a7',
+    center: { lat: 26.2124, lng: 127.6809 }, radiusKm: 40,
   },
-  { 
-    id: 'nara', name: 'Nara', kanji: '奈', color: '#5d4037',
-    center: { lat: 34.6851, lng: 135.8048 }, radiusKm: 8
+  {
+    id: 'nara', name: 'Nara', kanji: 'å¥ˆ', color: '#5d4037',
+    center: { lat: 34.6851, lng: 135.8048 }, radiusKm: 8,
   },
-  { 
-    id: 'kamakura', name: 'Kamakura', kanji: '鎌', color: '#004d40',
-    center: { lat: 35.3190, lng: 139.5467 }, radiusKm: 7
+  {
+    id: 'kamakura', name: 'Kamakura', kanji: 'éŽŒ', color: '#004d40',
+    center: { lat: 35.3190, lng: 139.5467 }, radiusKm: 7,
   },
-  { 
-    id: 'nikko', name: 'Nikko', kanji: '日', color: '#e65100',
-    center: { lat: 36.7199, lng: 139.6983 }, radiusKm: 12
+  {
+    id: 'nikko', name: 'Nikko', kanji: 'N', color: '#e65100',
+    center: { lat: 36.7199, lng: 139.6983 }, radiusKm: 12,
   },
-  { 
-    id: 'uji', name: 'Uji', kanji: '宇', color: '#33691e',
-    center: { lat: 34.8892, lng: 135.8077 }, radiusKm: 6
+  {
+    id: 'uji', name: 'Uji', kanji: 'å®‡', color: '#33691e',
+    center: { lat: 34.8892, lng: 135.8077 }, radiusKm: 6,
   },
 ];
 
-const StampBook: React.FC<StampBookProps> = ({ isOpen, onClose, days, media }) => {
-  // Lock scroll when open
+const StampBook: React.FC<StampBookProps> = ({ isOpen, onClose, days }) => {
+  const { media, loading } = useAllMedia({ enabled: isOpen, live: false, limit: 1000 });
+
   React.useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = 'hidden';
@@ -70,37 +71,33 @@ const StampBook: React.FC<StampBookProps> = ({ isOpen, onClose, days, media }) =
   }, [isOpen]);
 
   const unlockedLocations = React.useMemo(() => {
-    // 1. Check text-based locations from journal days
     const journalLocations = days
-      .map((d) => d.location?.toLowerCase() || '')
-      .filter((l) => l.length > 0);
-    
-    // 2. Extract coordinates from media
+      .map((day) => day.location?.toLowerCase() || '')
+      .filter((location) => location.length > 0);
+
     const mediaCoords = media
-      .filter((m) => m.latitude !== undefined && m.longitude !== undefined)
-      .map((m) => ({ lat: m.latitude!, lng: m.longitude! }));
+      .filter((item) => item.latitude !== undefined && item.longitude !== undefined)
+      .map((item) => ({ lat: item.latitude!, lng: item.longitude! }));
 
     return PREDEFINED_STAMPS.filter((stamp) => {
-      // Check if text matches
-      const textMatch = journalLocations.some((loc) => loc.includes(stamp.name.toLowerCase()));
+      const textMatch = journalLocations.some((location) => location.includes(stamp.name.toLowerCase()));
       if (textMatch) return true;
 
-      // Check if any photo is within the geofence
       if (stamp.center && stamp.radiusKm) {
-        return mediaCoords.some((coord) => 
-          isWithinRadius(coord.lat, coord.lng, stamp.center!.lat, stamp.center!.lng, stamp.radiusKm!)
+        return mediaCoords.some((coord) =>
+          isWithinRadius(coord.lat, coord.lng, stamp.center!.lat, stamp.center!.lng, stamp.radiusKm!),
         );
       }
 
       return false;
-    }).map(s => s.id);
+    }).map((stamp) => stamp.id);
   }, [days, media]);
 
   return (
     <AnimatePresence>
       {isOpen && (
         <div className="stamp-book-overlay">
-          <motion.div 
+          <motion.div
             className="stamp-book-backdrop"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -108,7 +105,7 @@ const StampBook: React.FC<StampBookProps> = ({ isOpen, onClose, days, media }) =
             onClick={onClose}
           />
 
-          <motion.div 
+          <motion.div
             className="stamp-book-modal"
             initial={{ opacity: 0, y: 50, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -122,49 +119,58 @@ const StampBook: React.FC<StampBookProps> = ({ isOpen, onClose, days, media }) =
                 </div>
                 <div className="header-text">
                   <h2>Eki-Stamp Samling</h2>
-                  <p>Minnen från platser du besökt i Japan</p>
+                  <p>Minnen fran platser du besokt i Japan</p>
                 </div>
                 <button className="close-btn" onClick={onClose}>
                   <X size={24} />
                 </button>
               </div>
 
-              <div className="stamp-grid">
-                {PREDEFINED_STAMPS.map((stamp) => {
-                  const isUnlocked = unlockedLocations.includes(stamp.id);
-                  return (
-                    <div 
-                      key={stamp.id} 
-                      className={`stamp-slot ${isUnlocked ? 'unlocked' : 'locked'}`}
-                    >
-                      <div className="stamp-circle-wrapper">
-                        <div 
-                          className="stamp-circle"
-                          style={{ 
-                            borderColor: isUnlocked ? stamp.color : '#ddd',
-                            color: isUnlocked ? stamp.color : '#ccc'
-                          }}
-                        >
-                          <span className="stamp-kanji">{stamp.kanji}</span>
-                          <div className="stamp-inner-border" style={{ borderColor: isUnlocked ? stamp.color : '#eee' }} />
-                        </div>
-                      </div>
-                      <span className="stamp-label">{stamp.name}</span>
-                    </div>
-                  );
-                })}
-              </div>
-
-              <div className="stamp-book-footer">
-                <p>Besök fler platser för att låsa upp fler stämplar</p>
-                <div className="progress-bar">
-                  <div 
-                    className="progress-fill" 
-                    style={{ width: `${(unlockedLocations.length / PREDEFINED_STAMPS.length) * 100}%` }} 
-                  />
+              {loading ? (
+                <div className="stamp-loading-state">
+                  <Loader2 className="spinner" size={28} />
+                  <p>Hamtar platser...</p>
                 </div>
-                <span className="progress-text">{unlockedLocations.length} av {PREDEFINED_STAMPS.length} stämplar samlade</span>
-              </div>
+              ) : (
+                <>
+                  <div className="stamp-grid">
+                    {PREDEFINED_STAMPS.map((stamp) => {
+                      const isUnlocked = unlockedLocations.includes(stamp.id);
+                      return (
+                        <div
+                          key={stamp.id}
+                          className={`stamp-slot ${isUnlocked ? 'unlocked' : 'locked'}`}
+                        >
+                          <div className="stamp-circle-wrapper">
+                            <div
+                              className="stamp-circle"
+                              style={{
+                                borderColor: isUnlocked ? stamp.color : '#ddd',
+                                color: isUnlocked ? stamp.color : '#ccc',
+                              }}
+                            >
+                              <span className="stamp-kanji">{stamp.kanji}</span>
+                              <div className="stamp-inner-border" style={{ borderColor: isUnlocked ? stamp.color : '#eee' }} />
+                            </div>
+                          </div>
+                          <span className="stamp-label">{stamp.name}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  <div className="stamp-book-footer">
+                    <p>Besok fler platser for att lasa upp fler stamplar</p>
+                    <div className="progress-bar">
+                      <div
+                        className="progress-fill"
+                        style={{ width: `${(unlockedLocations.length / PREDEFINED_STAMPS.length) * 100}%` }}
+                      />
+                    </div>
+                    <span className="progress-text">{unlockedLocations.length} av {PREDEFINED_STAMPS.length} stamplar samlade</span>
+                  </div>
+                </>
+              )}
             </div>
           </motion.div>
 
@@ -190,7 +196,7 @@ const StampBook: React.FC<StampBookProps> = ({ isOpen, onClose, days, media }) =
               position: relative;
               width: 100%;
               max-width: 600px;
-              background: #fbfaf5; /* Washi paper-ish */
+              background: #fbfaf5;
               border-radius: 24px;
               box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
               overflow: hidden;
@@ -199,7 +205,7 @@ const StampBook: React.FC<StampBookProps> = ({ isOpen, onClose, days, media }) =
 
             .stamp-book-paper {
               padding: 2.5rem;
-              background-image: 
+              background-image:
                 radial-gradient(circle at 2px 2px, rgba(0,0,0,0.02) 1px, transparent 0);
               background-size: 24px 24px;
               position: relative;
@@ -250,6 +256,16 @@ const StampBook: React.FC<StampBookProps> = ({ isOpen, onClose, days, media }) =
               color: var(--text-main);
             }
 
+            .stamp-loading-state {
+              display: flex;
+              flex-direction: column;
+              align-items: center;
+              justify-content: center;
+              gap: 0.75rem;
+              min-height: 220px;
+              color: var(--text-dim);
+            }
+
             .stamp-grid {
               display: grid;
               grid-template-columns: repeat(4, 1fr);
@@ -266,7 +282,7 @@ const StampBook: React.FC<StampBookProps> = ({ isOpen, onClose, days, media }) =
             }
 
             .stamp-slot.unlocked {
-              transform: scale(1.05) rotate(${Math.floor(Math.random() * 6) - 3}deg);
+              transform: scale(1.05);
             }
 
             .stamp-slot.locked {
@@ -358,25 +374,39 @@ const StampBook: React.FC<StampBookProps> = ({ isOpen, onClose, days, media }) =
               color: var(--text-dim);
             }
 
+            .spinner {
+              animation: spin 1s linear infinite;
+            }
+
+            @keyframes spin {
+              from { transform: rotate(0deg); }
+              to { transform: rotate(360deg); }
+            }
+
             @media (max-width: 600px) {
               .stamp-book-overlay {
                 padding: 1rem;
               }
+
               .stamp-grid {
                 grid-template-columns: repeat(3, 1fr);
                 gap: 1.5rem 0.5rem;
               }
+
               .stamp-book-paper {
                 padding: 1.5rem;
               }
+
               .stamp-circle-wrapper {
                 width: 65px;
                 height: 65px;
               }
+
               .stamp-circle {
                 width: 60px;
                 height: 60px;
               }
+
               .stamp-kanji {
                 font-size: 1.5rem;
               }

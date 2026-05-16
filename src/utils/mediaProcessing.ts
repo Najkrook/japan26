@@ -1,6 +1,6 @@
+import imageCompression from 'browser-image-compression';
 import exifr from 'exifr';
 import heic2any from 'heic2any';
-import imageCompression from 'browser-image-compression';
 
 export type MediaKind = 'photo' | 'video';
 export type CapturedAtSource = 'exif' | 'fallback';
@@ -19,6 +19,20 @@ export interface MediaDimensions {
   height: number;
 }
 
+export interface PhotoArtifacts {
+  dimensions: MediaDimensions;
+  thumbnailBlob: Blob;
+}
+
+interface LoadedImageResource {
+  image: HTMLImageElement;
+  cleanup: () => void;
+}
+
+interface LoadedVideoResource {
+  video: HTMLVideoElement;
+  cleanup: () => void;
+}
 
 const VIDEO_EXTENSIONS = ['.mov', '.mp4', '.m4v', '.webm', '.avi'];
 
@@ -27,18 +41,35 @@ const getExtension = (fileName: string): string => {
   return index >= 0 ? fileName.slice(index).toLowerCase() : '';
 };
 
+const releaseCanvas = (canvas: HTMLCanvasElement) => {
+  canvas.width = 0;
+  canvas.height = 0;
+};
+
+const createObjectUrlCleanup = (objectUrl: string, reset: () => void) => {
+  let cleanedUp = false;
+
+  return () => {
+    if (cleanedUp) {
+      return;
+    }
+
+    cleanedUp = true;
+    reset();
+    URL.revokeObjectURL(objectUrl);
+  };
+};
+
 export const isHeicFile = (file: File): boolean => {
   const extension = getExtension(file.name);
   return extension === '.heic' || extension === '.heif' || file.type === 'image/heic' || file.type === 'image/heif';
 };
 
 export const detectMediaKind = (file: File): MediaKind => {
-  // If browser reports it as video, trust it
   if (file.type.startsWith('video/')) {
     return 'video';
   }
 
-  // Common video extensions that might have missing/generic MIME types on some OS
   const extension = getExtension(file.name);
   if (VIDEO_EXTENSIONS.includes(extension)) {
     return 'video';
@@ -74,7 +105,6 @@ export const compressImage = async (file: File, kind: MediaKind): Promise<File> 
     return file;
   }
 
-  // Skip compression for very small files (< 500 KB)
   if (file.size < 500 * 1024) {
     return file;
   }
@@ -82,7 +112,6 @@ export const compressImage = async (file: File, kind: MediaKind): Promise<File> 
   try {
     const isHeic = file.name.match(/\.(heic|heif)$/i);
     const targetFileType = isHeic ? 'image/jpeg' : file.type;
-
     const options = {
       maxSizeMB: 1.5,
       maxWidthOrHeight: 1920,
@@ -91,16 +120,14 @@ export const compressImage = async (file: File, kind: MediaKind): Promise<File> 
       fileType: targetFileType,
       initialQuality: 0.85,
     };
-    
+
     const compressedBlob = await imageCompression(file, options);
-    
-    // Safety check: if compression somehow made it larger, use original
     if (compressedBlob.size >= file.size) {
       return file;
     }
-    
+
     const newFileName = isHeic ? file.name.replace(/\.(heic|heif)$/i, '.jpg') : file.name;
-    
+
     return new File([compressedBlob], newFileName, {
       type: targetFileType,
       lastModified: file.lastModified,
@@ -115,109 +142,123 @@ export const extractCapturedAt = async (
   file: File,
   kind: MediaKind = detectMediaKind(file),
 ): Promise<CapturedAtResult> => {
-  let location: CapturedAtResult['location'] | undefined = undefined;
-  let candidate: Date | undefined = undefined;
-
-  if (kind === 'photo') {
-    try {
-      const metadata = await exifr.parse(file, {
-        pick: ['DateTimeOriginal', 'CreateDate'],
-      });
-
-      if (metadata) {
-        candidate = metadata.DateTimeOriginal ?? metadata.CreateDate;
-      }
-    } catch (error) {
-      console.warn('Could not read EXIF capture date, falling back to file metadata', error);
-    }
-
-    try {
-      const gps = await exifr.gps(file);
-      if (gps && gps.latitude !== undefined && gps.longitude !== undefined) {
-        location = {
-          latitude: gps.latitude,
-          longitude: gps.longitude,
-        };
-      }
-    } catch (error) {
-      console.warn('Could not read GPS metadata', error);
-    }
+  if (kind !== 'photo') {
+    return {
+      capturedAt: new Date(file.lastModified),
+      source: 'fallback',
+      location: undefined,
+    };
   }
 
-  if (candidate instanceof Date) {
-    return { capturedAt: candidate, source: 'exif', location };
-  }
+  try {
+    const metadata = await exifr.parse(file, {
+      pick: ['DateTimeOriginal', 'CreateDate', 'latitude', 'longitude'],
+    });
+    const candidate = metadata?.DateTimeOriginal ?? metadata?.CreateDate;
+    const latitude = metadata?.latitude;
+    const longitude = metadata?.longitude;
+    const location =
+      typeof latitude === 'number' && typeof longitude === 'number'
+        ? {
+            latitude,
+            longitude,
+          }
+        : undefined;
 
-  return {
-    capturedAt: new Date(file.lastModified),
-    source: 'fallback',
-    location,
-  };
+    if (candidate instanceof Date) {
+      return {
+        capturedAt: candidate,
+        source: 'exif',
+        location,
+      };
+    }
+
+    return {
+      capturedAt: new Date(file.lastModified),
+      source: 'fallback',
+      location,
+    };
+  } catch (error) {
+    console.warn('Could not read EXIF metadata, falling back to file metadata', error);
+    return {
+      capturedAt: new Date(file.lastModified),
+      source: 'fallback',
+      location: undefined,
+    };
+  }
 };
 
-const loadImage = (file: File): Promise<HTMLImageElement> =>
+const loadImageResource = (file: File): Promise<LoadedImageResource> =>
   new Promise((resolve, reject) => {
     const image = new Image();
     const objectUrl = URL.createObjectURL(file);
+    const cleanup = createObjectUrlCleanup(objectUrl, () => {
+      image.onload = null;
+      image.onerror = null;
+      image.src = '';
+    });
+
     image.onload = () => {
-      URL.revokeObjectURL(objectUrl);
-      resolve(image);
+      resolve({
+        image,
+        cleanup,
+      });
     };
     image.onerror = () => {
-      URL.revokeObjectURL(objectUrl);
-      reject(new Error('Kunde inte läsa bilden.'));
+      cleanup();
+      reject(new Error('Kunde inte lasa bilden.'));
     };
     image.src = objectUrl;
   });
 
-const loadVideo = (file: File): Promise<HTMLVideoElement> =>
+const loadVideoResource = (file: File): Promise<LoadedVideoResource> =>
   new Promise((resolve, reject) => {
     const video = document.createElement('video');
     const objectUrl = URL.createObjectURL(file);
-    
-    // Safety timeout to prevent hanging on corrupted or massive files
-    const timeout = setTimeout(() => {
+    const timeout = window.setTimeout(() => {
       cleanup();
-      reject(new Error('Videoinläsning tog för lång tid.'));
+      reject(new Error('Videoinlasning tog for lang tid.'));
     }, 12000);
 
-    const cleanup = () => {
+    const cleanup = createObjectUrlCleanup(objectUrl, () => {
       clearTimeout(timeout);
-      URL.revokeObjectURL(objectUrl);
-      video.onloadedmetadata = null;
+      video.onloadeddata = null;
       video.onseeked = null;
       video.onerror = null;
-    };
+      video.pause();
+      video.removeAttribute('src');
+      video.src = '';
+      video.load();
+    });
 
     video.preload = 'auto';
     video.playsInline = true;
     video.muted = true;
     video.crossOrigin = 'anonymous';
-    video.setAttribute('playsinline', ''); // Essential for iOS Safari
+    video.setAttribute('playsinline', '');
 
     video.onloadeddata = () => {
-      // Seek to 0.1s to get a good thumbnail instead of a black start frame,
-      // safer than 0.5s for very short clips.
       video.currentTime = 0.1;
     };
 
     video.onseeked = () => {
-      // Don't cleanup the URL yet, we need it to draw to canvas!
-      // We only cleanup metadata/events
       clearTimeout(timeout);
       video.onloadeddata = null;
       video.onseeked = null;
       video.onerror = null;
-      resolve(video);
+      resolve({
+        video,
+        cleanup,
+      });
     };
 
     video.onerror = () => {
       cleanup();
-      reject(new Error('Kunde inte läsa videofilen.'));
+      reject(new Error('Kunde inte lasa videofilen.'));
     };
 
     video.src = objectUrl;
-    video.load(); // Force Safari iOS to start loading
+    video.load();
   });
 
 const canvasToBlob = (canvas: HTMLCanvasElement): Promise<Blob> =>
@@ -236,62 +277,94 @@ const canvasToBlob = (canvas: HTMLCanvasElement): Promise<Blob> =>
     );
   });
 
-export const readMediaDimensions = async (file: File, kind: MediaKind): Promise<MediaDimensions> => {
-  if (kind === 'video') {
-    const video = await loadVideo(file);
-    return {
-      width: video.videoWidth || 0,
-      height: video.videoHeight || 0,
-    };
-  }
-
-  const image = await loadImage(file);
-  return {
-    width: image.naturalWidth || image.width || 0,
-    height: image.naturalHeight || image.height || 0,
-  };
-};
-
-export const createThumbnail = async (file: File, kind: MediaKind, maxSize = 600): Promise<Blob> => {
+const drawPhotoThumbnail = async (image: HTMLImageElement, maxSize: number): Promise<Blob> => {
+  const width = image.naturalWidth || image.width || maxSize;
+  const height = image.naturalHeight || image.height || maxSize;
+  const scale = Math.min(maxSize / width, maxSize / height, 1);
   const canvas = document.createElement('canvas');
   const context = canvas.getContext('2d');
 
   if (!context) {
+    releaseCanvas(canvas);
     throw new Error('Kunde inte skapa canvas-kontekst.');
   }
 
+  try {
+    canvas.width = Math.max(1, Math.round(width * scale));
+    canvas.height = Math.max(1, Math.round(height * scale));
+    context.drawImage(image, 0, 0, canvas.width, canvas.height);
+    return await canvasToBlob(canvas);
+  } finally {
+    releaseCanvas(canvas);
+  }
+};
+
+export const preparePhotoArtifacts = async (file: File, maxSize = 600): Promise<PhotoArtifacts> => {
+  const { image, cleanup } = await loadImageResource(file);
+
+  try {
+    return {
+      dimensions: {
+        width: image.naturalWidth || image.width || 0,
+        height: image.naturalHeight || image.height || 0,
+      },
+      thumbnailBlob: await drawPhotoThumbnail(image, maxSize),
+    };
+  } finally {
+    cleanup();
+  }
+};
+
+export const readMediaDimensions = async (file: File, kind: MediaKind): Promise<MediaDimensions> => {
   if (kind === 'video') {
-    let video: HTMLVideoElement | null = null;
+    const { video, cleanup } = await loadVideoResource(file);
     try {
-      video = await loadVideo(file);
+      return {
+        width: video.videoWidth || 0,
+        height: video.videoHeight || 0,
+      };
+    } finally {
+      cleanup();
+    }
+  }
+
+  const { image, cleanup } = await loadImageResource(file);
+  try {
+    return {
+      width: image.naturalWidth || image.width || 0,
+      height: image.naturalHeight || image.height || 0,
+    };
+  } finally {
+    cleanup();
+  }
+};
+
+export const createThumbnail = async (file: File, kind: MediaKind, maxSize = 600): Promise<Blob> => {
+  if (kind === 'video') {
+    const canvas = document.createElement('canvas');
+    const context = canvas.getContext('2d');
+
+    if (!context) {
+      releaseCanvas(canvas);
+      throw new Error('Kunde inte skapa canvas-kontekst.');
+    }
+
+    const { video, cleanup } = await loadVideoResource(file);
+
+    try {
       const width = video.videoWidth || maxSize;
       const height = video.videoHeight || maxSize;
       const scale = Math.min(maxSize / width, maxSize / height, 1);
       canvas.width = Math.max(1, Math.round(width * scale));
       canvas.height = Math.max(1, Math.round(height * scale));
       context.drawImage(video, 0, 0, canvas.width, canvas.height);
-      
-      // Cleanup the video resource now that we are done drawing
-      if (video.src) {
-        URL.revokeObjectURL(video.src);
-        video.src = '';
-      }
-      
-      return canvasToBlob(canvas);
-    } catch (err) {
-      if (video && video.src) {
-        URL.revokeObjectURL(video.src);
-      }
-      throw err;
+      return await canvasToBlob(canvas);
+    } finally {
+      cleanup();
+      releaseCanvas(canvas);
     }
   }
 
-  const image = await loadImage(file);
-  const width = image.naturalWidth || image.width || maxSize;
-  const height = image.naturalHeight || image.height || maxSize;
-  const scale = Math.min(maxSize / width, maxSize / height, 1);
-  canvas.width = Math.max(1, Math.round(width * scale));
-  canvas.height = Math.max(1, Math.round(height * scale));
-  context.drawImage(image, 0, 0, canvas.width, canvas.height);
-  return canvasToBlob(canvas);
+  const { thumbnailBlob } = await preparePhotoArtifacts(file, maxSize);
+  return thumbnailBlob;
 };

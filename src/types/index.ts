@@ -62,3 +62,5 @@ export interface HardcodedAccountProfile {
   name: string;
   role: UserRole;
 }
+
+export type DataLoadMode = 'off' | 'once' | 'live';

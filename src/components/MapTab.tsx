@@ -1,17 +1,17 @@
 import React from 'react';
-import { MapContainer, Marker, Popup, TileLayer, Polyline, useMap, useMapEvents } from 'react-leaflet';
-import { Image as ImageIcon, Loader2, MapPin, TriangleAlert, Calendar } from 'lucide-react';
+import { Calendar, Image as ImageIcon, Loader2, MapPin, TriangleAlert } from 'lucide-react';
 import L from 'leaflet';
-import iconUrl from 'leaflet/dist/images/marker-icon.png';
 import iconShadow from 'leaflet/dist/images/marker-shadow.png';
+import iconUrl from 'leaflet/dist/images/marker-icon.png';
+import { MapContainer, Marker, Polyline, Popup, TileLayer, useMap, useMapEvents } from 'react-leaflet';
 import { useAllMedia } from '../hooks/useAllMedia';
 import type { Media } from '../types';
 import { formatDateSwedish } from '../utils/dateHelpers';
 import { preloadImageUrl } from '../utils/imagePreload';
 import {
   DEFAULT_MAP_CENTER,
-  getMapBounds,
   getJourneyPath,
+  getMapBounds,
   type DayStop,
   type MapBounds,
   type MapCoordinate,
@@ -25,9 +25,16 @@ const DefaultIcon = L.icon({
 });
 L.Marker.prototype.options.icon = DefaultIcon;
 
+interface MapViewState {
+  center: MapCoordinate;
+  zoom: number;
+}
+
 interface MapTabProps {
-  isActive?: boolean;
+  initialView?: MapViewState;
+  hasPersistedView?: boolean;
   onMediaOpen?: (media: Media[], index: number) => void;
+  onViewChange?: (view: MapViewState) => void;
 }
 
 interface ProjectedPoint {
@@ -58,7 +65,7 @@ const averageCoordinate = (stops: Array<{ stop: DayStop }>): MapCoordinate => {
       acc.lng += item.stop.coordinate[1];
       return acc;
     },
-    { lat: 0, lng: 0 }
+    { lat: 0, lng: 0 },
   );
 
   return [totals.lat / stops.length, totals.lng / stops.length];
@@ -67,7 +74,7 @@ const averageCoordinate = (stops: Array<{ stop: DayStop }>): MapCoordinate => {
 const buildClusteredStops = (
   journeyStops: DayStop[],
   zoom: number,
-  project: (coordinate: MapCoordinate, zoom: number) => ProjectedPoint
+  project: (coordinate: MapCoordinate, zoom: number) => ProjectedPoint,
 ): ClusteredStop[] => {
   if (zoom >= CLUSTER_DISABLE_ZOOM) {
     return journeyStops.map((stop, index) => ({ type: 'stop', stop, index }));
@@ -124,11 +131,11 @@ const buildClusteredStops = (
   return results;
 };
 
-const FitMapToBounds: React.FC<{ bounds: MapBounds | null }> = ({ bounds }) => {
+const FitMapToBounds: React.FC<{ bounds: MapBounds | null; shouldFit: boolean }> = ({ bounds, shouldFit }) => {
   const map = useMap();
 
   React.useEffect(() => {
-    if (!bounds) {
+    if (!bounds || !shouldFit) {
       return;
     }
 
@@ -136,22 +143,33 @@ const FitMapToBounds: React.FC<{ bounds: MapBounds | null }> = ({ bounds }) => {
       padding: [32, 32],
       maxZoom: 13,
     });
-  }, [bounds, map]);
+  }, [bounds, map, shouldFit]);
 
   return null;
 };
 
-const MapResizer: React.FC<{ isActive: boolean }> = ({ isActive }) => {
-  const map = useMap();
+const MapViewTracker: React.FC<{ onViewChange?: (view: MapViewState) => void }> = ({ onViewChange }) => {
+  const map = useMapEvents({
+    moveend: () => {
+      onViewChange?.({
+        center: [map.getCenter().lat, map.getCenter().lng],
+        zoom: map.getZoom(),
+      });
+    },
+    zoomend: () => {
+      onViewChange?.({
+        center: [map.getCenter().lat, map.getCenter().lng],
+        zoom: map.getZoom(),
+      });
+    },
+  });
 
   React.useEffect(() => {
-    if (isActive) {
-      const timeoutId = setTimeout(() => {
-        map.invalidateSize();
-      }, 50);
-      return () => clearTimeout(timeoutId);
-    }
-  }, [isActive, map]);
+    onViewChange?.({
+      center: [map.getCenter().lat, map.getCenter().lng],
+      zoom: map.getZoom(),
+    });
+  }, [map, onViewChange]);
 
   return null;
 };
@@ -169,7 +187,7 @@ const JourneyMarkers: React.FC<{
 
   const clusteredStops = React.useMemo(
     () => buildClusteredStops(journeyStops, zoom, (coordinate, activeZoom) => map.project(coordinate, activeZoom)),
-    [journeyStops, map, zoom]
+    [journeyStops, map, zoom],
   );
 
   return (
@@ -200,6 +218,7 @@ const JourneyMarkers: React.FC<{
 
         const representativeMedia = item.stop.media[0];
         const previewId = representativeMedia?.id ?? item.stop.dayId;
+        const previewSrc = representativeMedia?.thumbnailUrl;
 
         return (
           <Marker
@@ -208,10 +227,8 @@ const JourneyMarkers: React.FC<{
             icon={createHankoIcon(item.index)}
             eventHandlers={{
               mouseover: () => {
-                if (representativeMedia) {
-                  preloadImageUrl(representativeMedia.thumbnailUrl || representativeMedia.url).catch(
-                    () => undefined
-                  );
+                if (previewSrc) {
+                  void preloadImageUrl(previewSrc).catch(() => undefined);
                 }
               },
             }}
@@ -219,9 +236,9 @@ const JourneyMarkers: React.FC<{
             <Popup className="polaroid-popup">
               <div className="polaroid-frame">
                 <div className="polaroid-image-container">
-                  {representativeMedia ? (
+                  {previewSrc ? (
                     <img
-                      src={representativeMedia.thumbnailUrl || representativeMedia.url}
+                      src={previewSrc}
                       alt={item.stop.dayId}
                       className="polaroid-image"
                       loading="lazy"
@@ -247,7 +264,7 @@ const JourneyMarkers: React.FC<{
                   data-testid={`map-open-media-${previewId}`}
                   onClick={() => onMediaOpen?.(item.stop.media, 0)}
                 >
-                  Upptäck dagen
+                  Upptack dagen
                 </button>
               </div>
             </Popup>
@@ -258,13 +275,18 @@ const JourneyMarkers: React.FC<{
   );
 };
 
-const MapTab: React.FC<MapTabProps> = ({ isActive = true, onMediaOpen }) => {
+const MapTab: React.FC<MapTabProps> = ({
+  initialView = { center: DEFAULT_MAP_CENTER, zoom: 6 },
+  hasPersistedView = false,
+  onMediaOpen,
+  onViewChange,
+}) => {
   const { media, loading, error } = useAllMedia();
   const journeyStops = React.useMemo(() => getJourneyPath(media), [media]);
   const bounds = React.useMemo(() => getMapBounds(journeyStops), [journeyStops]);
   const journeyCoordinates = React.useMemo(
     () => journeyStops.map((stop) => stop.coordinate),
-    [journeyStops]
+    [journeyStops],
   );
   const hasAnyMedia = media.length > 0;
 
@@ -300,13 +322,13 @@ const MapTab: React.FC<MapTabProps> = ({ isActive = true, onMediaOpen }) => {
           </div>
         ) : (
           <MapContainer
-            center={DEFAULT_MAP_CENTER}
-            zoom={6}
+            center={initialView.center}
+            zoom={initialView.zoom}
             scrollWheelZoom
             className="leaflet-container"
           >
-            <MapResizer isActive={isActive} />
-            <FitMapToBounds bounds={bounds} />
+            <FitMapToBounds bounds={bounds} shouldFit={!hasPersistedView} />
+            <MapViewTracker onViewChange={onViewChange} />
             <TileLayer
               attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
               url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -579,20 +601,6 @@ const MapTab: React.FC<MapTabProps> = ({ isActive = true, onMediaOpen }) => {
           position: relative;
         }
 
-        .polaroid-frame::after {
-          content: "";
-          position: absolute;
-          bottom: 12px;
-          left: 50%;
-          transform: translateX(-50%);
-          width: 80%;
-          height: 20px;
-          font-family: 'Kalam', cursive;
-          color: #333;
-          font-size: 0.9rem;
-          text-align: center;
-        }
-
         .polaroid-image-container {
           width: 100%;
           height: 160px;
@@ -656,6 +664,16 @@ const MapTab: React.FC<MapTabProps> = ({ isActive = true, onMediaOpen }) => {
 
         .polaroid-action-btn:hover {
           background: var(--primary);
+        }
+
+        .spinner {
+          animation: spin 1s linear infinite;
+          color: var(--primary);
+        }
+
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
         }
 
         @media (max-width: 768px) {

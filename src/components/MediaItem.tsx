@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { MessageCircle, Play, X } from 'lucide-react';
+import { Image as ImageIcon, MessageCircle, Play, X } from 'lucide-react';
 import type { Media } from '../types';
-
 import { preloadImageUrl } from '../utils/imagePreload';
 
 interface MediaItemProps {
@@ -13,19 +12,31 @@ interface MediaItemProps {
   onDelete?: () => void;
 }
 
-const MediaItem: React.FC<MediaItemProps> = ({ item, isAdmin, commentCount, onClick, onDelete }) => {
-  const [isLoaded, setIsLoaded] = useState(false);
+const canHoverMedia = () => {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+    return true;
+  }
 
-  const handleDelete = (e: React.MouseEvent) => {
-    e.stopPropagation();
+  return window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+};
+
+const MediaItem: React.FC<MediaItemProps> = ({ item, isAdmin, commentCount, onClick, onDelete }) => {
+  const supportsHover = canHoverMedia();
+  const [isLoaded, setIsLoaded] = useState(() =>
+    item.type === 'photo' ? !Boolean(item.thumbnailUrl) : false,
+  );
+  const hasPhotoThumbnail = item.type !== 'photo' || Boolean(item.thumbnailUrl);
+
+  const handleDelete = (event: React.MouseEvent) => {
+    event.stopPropagation();
     if (onDelete && window.confirm('Vill du ta bort denna bild permanent?')) {
       onDelete();
     }
   };
 
   const handlePreload = () => {
-    if (item.type === 'photo') {
-      preloadImageUrl(item.url).catch(() => undefined);
+    if (supportsHover && item.type === 'photo') {
+      void preloadImageUrl(item.url).catch(() => undefined);
     }
   };
 
@@ -33,17 +44,15 @@ const MediaItem: React.FC<MediaItemProps> = ({ item, isAdmin, commentCount, onCl
     <motion.button
       type="button"
       className="media-item-container"
-      layout
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      whileHover={{ y: -5 }}
+      whileHover={supportsHover ? { y: -5 } : undefined}
       onClick={onClick}
       onMouseEnter={handlePreload}
-      onTouchStart={handlePreload}
     >
       <div className={`media-preview-wrapper ${!isLoaded ? 'is-loading' : 'is-loaded'}`}>
         {!isLoaded && <div className="ink-wash-loader"></div>}
-        
+
         {item.type === 'video' && !item.thumbnailUrl ? (
           <video
             src={`${item.url}#t=0.001`}
@@ -54,9 +63,14 @@ const MediaItem: React.FC<MediaItemProps> = ({ item, isAdmin, commentCount, onCl
             className="media-image"
             style={{ objectFit: 'cover', pointerEvents: 'none' }}
           />
+        ) : item.type === 'photo' && !hasPhotoThumbnail ? (
+          <div className="media-placeholder" data-testid={`media-placeholder-${item.id}`}>
+            <ImageIcon size={28} />
+            <span>Miniatyr saknas</span>
+          </div>
         ) : (
           <img
-            src={item.thumbnailUrl || item.url}
+            src={item.thumbnailUrl}
             alt={item.fileName}
             loading="lazy"
             onLoad={() => setIsLoaded(true)}
@@ -82,8 +96,8 @@ const MediaItem: React.FC<MediaItemProps> = ({ item, isAdmin, commentCount, onCl
         </div>
 
         {isAdmin && (
-          <button 
-            className="item-delete-btn" 
+          <button
+            className="item-delete-btn"
             onClick={handleDelete}
             title="Ta bort bild"
           >
@@ -108,15 +122,31 @@ const MediaItem: React.FC<MediaItemProps> = ({ item, isAdmin, commentCount, onCl
           height: 100%;
         }
 
-        .media-image {
+        .media-image,
+        .media-placeholder {
           width: 100%;
           height: 100%;
+          position: relative;
+          z-index: 2;
+        }
+
+        .media-image {
           object-fit: cover;
           transition: transform 0.4s ease, opacity 0.8s cubic-bezier(0.22, 1, 0.36, 1), filter 0.8s cubic-bezier(0.22, 1, 0.36, 1);
           opacity: 0;
           filter: blur(10px);
-          position: relative;
-          z-index: 2;
+        }
+
+        .media-placeholder {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          gap: 0.5rem;
+          background: linear-gradient(135deg, rgba(188, 0, 45, 0.08), rgba(188, 0, 45, 0.02));
+          color: var(--text-dim);
+          font-size: 0.8rem;
+          font-weight: 600;
         }
 
         .is-loaded .media-image {

@@ -47,9 +47,12 @@ vi.mock('../hooks/useAllMedia', () => ({
 vi.mock('../hooks/useMaintenance', () => ({
   useMaintenance: () => ({
     orphanedMedia: [],
+    isScanning: false,
     isCleaning: false,
     lastCleanCount: null,
     lastFailCount: null,
+    scanError: null,
+    scanOrphanedMedia: vi.fn(),
     cleanupOrphanedMedia: vi.fn(),
   }),
 }));
@@ -134,7 +137,7 @@ describe('App admin upload access', () => {
     expect(screen.queryByTestId('mock-upload-panel')).toBeNull();
   });
 
-  it('reveals upload tools for admins', () => {
+  it('reveals upload tools for admins', async () => {
     adminState.isAdmin = true;
     adminState.canPost = true;
 
@@ -142,6 +145,6 @@ describe('App admin upload access', () => {
 
     fireEvent.click(screen.getByTestId('toggle-admin-panel'));
 
-    expect(screen.getByTestId('mock-upload-panel').textContent).toContain('Upload panel');
+    expect((await screen.findByTestId('mock-upload-panel')).textContent).toContain('Upload panel');
   });
 });

@@ -1,14 +1,13 @@
 import React, { useState } from 'react';
 import { useInView } from 'react-intersection-observer';
 import { motion } from 'framer-motion';
-import { Image as ImageIcon, Loader2, Edit3, Check, X } from 'lucide-react';
-import { useMedia } from '../hooks/useMedia';
+import { Check, Edit3, Image as ImageIcon, Loader2, X } from 'lucide-react';
 import { useDayCommentCounts } from '../hooks/useDayCommentCounts';
-import MediaGrid from './MediaGrid';
-import EmaBoard from './EmaBoard';
+import { useMedia } from '../hooks/useMedia';
+import type { DataLoadMode, Day, Media, UpdateDayInput } from '../types';
 import { formatDateSwedish } from '../utils/dateHelpers';
-import { preloadImageUrl } from '../utils/imagePreload';
-import type { Day, Media, UpdateDayInput } from '../types';
+import EmaBoard from './EmaBoard';
+import MediaGrid from './MediaGrid';
 
 interface DaySectionProps {
   day: Day;
@@ -23,6 +22,58 @@ interface DaySectionProps {
   onDeleteMedia?: (item: Media) => Promise<void>;
 }
 
+interface DaySectionContentProps {
+  dayId: string;
+  mode: DataLoadMode;
+  isAdmin: boolean;
+  onMediaClick: (media: Media[], index: number) => void;
+  onDeleteMedia?: (item: Media) => Promise<void>;
+}
+
+const DaySectionContent: React.FC<DaySectionContentProps> = ({
+  dayId,
+  mode,
+  isAdmin,
+  onMediaClick,
+  onDeleteMedia,
+}) => {
+  const { media, loading: mediaLoading, error: mediaError } = useMedia(dayId, mode);
+  const { counts: commentCounts } = useDayCommentCounts(dayId, mode);
+
+  return (
+    <>
+      <div className="card-media">
+        {mediaLoading ? (
+          <div className="loading-state-inline">
+            <Loader2 className="spinner" size={24} />
+            <p>Hamtar minnen...</p>
+          </div>
+        ) : media.length > 0 ? (
+          <MediaGrid
+            media={media}
+            isAdmin={isAdmin}
+            commentCounts={commentCounts}
+            onItemClick={(item) => {
+              const index = media.findIndex((candidate) => candidate.id === item.id);
+              onMediaClick(media, index);
+            }}
+            onDeleteItem={onDeleteMedia}
+          />
+        ) : (
+          <div className="empty-state-card">
+            <div className="empty-icon-small">
+              <ImageIcon size={32} />
+            </div>
+            <p>{mediaError ?? 'Inga bilder an.'}</p>
+          </div>
+        )}
+      </div>
+
+      <EmaBoard dayId={dayId} />
+    </>
+  );
+};
+
 const DaySection: React.FC<DaySectionProps> = ({
   day,
   isActive,
@@ -34,7 +85,11 @@ const DaySection: React.FC<DaySectionProps> = ({
   onDeleteMedia,
 }) => {
   const [hasAnimated, setHasAnimated] = useState(false);
-  const { ref } = useInView({
+  const [isEditingText, setIsEditingText] = useState(false);
+  const [draftText, setDraftText] = useState(day.description || '');
+  const [draftLocation, setDraftLocation] = useState(day.location || '');
+  const [isSaving, setIsSaving] = useState(false);
+  const { ref: activeRef } = useInView({
     rootMargin: '-10% 0px -30% 0px',
     onChange: (visible) => {
       if (visible) {
@@ -43,45 +98,30 @@ const DaySection: React.FC<DaySectionProps> = ({
       }
     },
   });
+  const { ref: nearViewportRef, inView: isNearViewport } = useInView({
+    rootMargin: '200% 0px 200% 0px',
+  });
 
-  const { media, loading: mediaLoading, error: mediaError } = useMedia(day.id);
-  const { counts: commentCounts } = useDayCommentCounts(day.id);
+  const setRefs = React.useCallback(
+    (node: HTMLDivElement | null) => {
+      activeRef(node);
+      nearViewportRef(node);
+    },
+    [activeRef, nearViewportRef],
+  );
 
-  // Smart Preload Queue for Active Day
-  React.useEffect(() => {
-    let cancel = false;
-
-    const runQueue = async () => {
-      if (!isActive || !media.length) return;
-
-      for (const item of media) {
-        if (cancel) break;
-        if (item.type === 'photo') {
-          // Preload one image at a time, wait for it to finish gracefully
-          await preloadImageUrl(item.url).catch(() => undefined);
-        }
-      }
-    };
-
-    runQueue();
-
-    return () => {
-      cancel = true;
-    };
-  }, [isActive, media]);
-
-  const [isEditingText, setIsEditingText] = useState(false);
-  const [draftText, setDraftText] = useState(day.description || '');
-  const [draftLocation, setDraftLocation] = useState(day.location || '');
-  const [isSaving, setIsSaving] = useState(false);
+  const contentMode: DataLoadMode = isActive ? 'live' : isNearViewport ? 'once' : 'off';
+  const shouldMountContent = contentMode !== 'off';
 
   const handleSaveText = async () => {
-    if (onUpdateDay) {
-      setIsSaving(true);
-      await onUpdateDay(day.id, { description: draftText, location: draftLocation });
-      setIsSaving(false);
-      setIsEditingText(false);
+    if (!onUpdateDay) {
+      return;
     }
+
+    setIsSaving(true);
+    await onUpdateDay(day.id, { description: draftText, location: draftLocation });
+    setIsSaving(false);
+    setIsEditingText(false);
   };
 
   const handleCancelText = () => {
@@ -91,41 +131,40 @@ const DaySection: React.FC<DaySectionProps> = ({
   };
 
   const handleDeleteDay = async () => {
-    if (onDeleteDay && window.confirm('Är du säker på att du vill ta bort hela denna dag? Detta kan inte ångras.')) {
+    if (onDeleteDay && window.confirm('Ar du saker pa att du vill ta bort hela denna dag? Detta kan inte angras.')) {
       await onDeleteDay(day.id);
     }
   };
 
-  // Extract day and month for the specific design
   const dateObj = day.date;
-  const monthNames = ["Januari", "Februari", "Mars", "April", "Maj", "Juni", "Juli", "Augusti", "September", "Oktober", "November", "December"];
+  const monthNames = ['Januari', 'Februari', 'Mars', 'April', 'Maj', 'Juni', 'Juli', 'Augusti', 'September', 'Oktober', 'November', 'December'];
   const dateStr = `${dateObj.getDate()} ${monthNames[dateObj.getMonth()]}`;
-  const locationStr = day.location ? ` — ${day.location}` : '';
+  const locationStr = day.location ? ` - ${day.location}` : '';
   const dateFormatted = `${dateStr}${locationStr}`;
-  
   const defaultTitle = formatDateSwedish(day.date);
-  const isDefaultOrSimilar = day.title.toLowerCase() === defaultTitle.toLowerCase() || day.title.toLowerCase() === dateFormatted.toLowerCase();
+  const isDefaultOrSimilar =
+    day.title.toLowerCase() === defaultTitle.toLowerCase() ||
+    day.title.toLowerCase() === dateFormatted.toLowerCase();
 
   return (
-    <motion.div 
-      className="day-wrapper" 
-      ref={ref} 
+    <motion.div
+      className="day-wrapper"
+      ref={setRefs}
       id={`day-${day.id}`}
       initial={{ opacity: 0, y: 30 }}
       animate={hasAnimated ? { opacity: 1, y: 0 } : {}}
       transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
     >
-      {!mediaLoading && media.length > 0 && <div className="timeline-dot" />}
       <article className="journal-card">
         <div className="card-header">
           {!isDefaultOrSimilar && <p className="card-date">{dateFormatted}</p>}
           <h2 className="card-title">{day.title}</h2>
-          
+
           {isAdmin && onDeleteDay && (
-            <button 
-              className="card-delete-trigger" 
+            <button
+              className="card-delete-trigger"
               onClick={handleDeleteDay}
-              title="Ta bort inlägg"
+              title="Ta bort inlagg"
             >
               <X size={20} />
             </button>
@@ -138,29 +177,29 @@ const DaySection: React.FC<DaySectionProps> = ({
               <input
                 type="text"
                 value={draftLocation}
-                onChange={(e) => setDraftLocation(e.target.value)}
+                onChange={(event) => setDraftLocation(event.target.value)}
                 placeholder="Plats (t.ex. Tokyo)"
                 className="editor-input-short"
                 disabled={isSaving}
               />
               <textarea
                 value={draftText}
-                onChange={(e) => setDraftText(e.target.value)}
-                placeholder="Skriv något om dagen..."
+                onChange={(event) => setDraftText(event.target.value)}
+                placeholder="Skriv nagot om dagen..."
                 className="editor-textarea"
                 rows={4}
                 disabled={isSaving}
               />
               <div className="editor-actions">
-                <button 
-                  className="editor-btn cancel" 
+                <button
+                  className="editor-btn cancel"
                   onClick={handleCancelText}
                   disabled={isSaving}
                 >
                   <X size={16} /> Avbryt
                 </button>
-                <button 
-                  className="editor-btn save" 
+                <button
+                  className="editor-btn save"
                   onClick={handleSaveText}
                   disabled={isSaving}
                 >
@@ -171,49 +210,37 @@ const DaySection: React.FC<DaySectionProps> = ({
           ) : (
             <div className="card-body-text fade-in">
               {day.description && <p>{day.description}</p>}
-              
+
               {isAdmin && (
-                <button 
-                  className="inline-edit-trigger" 
+                <button
+                  className="inline-edit-trigger"
                   onClick={() => setIsEditingText(true)}
                   title="Redigera text"
                 >
-                  <Edit3 size={16} /> 
-                  <span>{day.description ? 'Redigera text' : 'Skriv något om dagen...'}</span>
+                  <Edit3 size={16} />
+                  <span>{day.description ? 'Redigera text' : 'Skriv nagot om dagen...'}</span>
                 </button>
               )}
             </div>
           )}
         </div>
 
-        <div className="card-media">
-          {mediaLoading ? (
-            <div className="loading-state-inline">
-              <Loader2 className="spinner" size={24} />
-              <p>Hämtar minnen...</p>
+        {shouldMountContent ? (
+          <DaySectionContent
+            dayId={day.id}
+            mode={contentMode}
+            isAdmin={isAdmin}
+            onMediaClick={onMediaClick}
+            onDeleteMedia={onDeleteMedia}
+          />
+        ) : (
+          <div className="card-media">
+            <div className="deferred-media-state">
+              <ImageIcon size={24} />
+              <p>Media laddas nar kortet kommer narmare.</p>
             </div>
-          ) : media.length > 0 ? (
-            <MediaGrid
-              media={media}
-              isAdmin={isAdmin}
-              commentCounts={commentCounts}
-              onItemClick={(item) => {
-                const index = media.findIndex((m) => m.id === item.id);
-                onMediaClick(media, index);
-              }}
-              onDeleteItem={onDeleteMedia}
-            />
-          ) : (
-            <div className="empty-state-card">
-              <div className="empty-icon-small">
-                <ImageIcon size={32} />
-              </div>
-              <p>{mediaError ?? 'Inga bilder än.'}</p>
-            </div>
-          )}
-        </div>
-
-        <EmaBoard dayId={day.id} />
+          </div>
+        )}
       </article>
 
       <style>{`
@@ -250,7 +277,7 @@ const DaySection: React.FC<DaySectionProps> = ({
           font-weight: 500;
           font-size: 0.85rem;
           margin-bottom: 0.5rem;
-          font-family: var(--font-mono); /* Space Grotesk in dark mode via variable */
+          font-family: var(--font-mono);
           letter-spacing: 0.15em;
           text-transform: uppercase;
           opacity: 0.8;
@@ -265,7 +292,6 @@ const DaySection: React.FC<DaySectionProps> = ({
           border: 1px solid var(--border-color);
         }
 
-        /* Electric Noir specific card flair */
         [data-theme='dark'] .journal-card::before {
           content: '';
           position: absolute;
@@ -429,7 +455,8 @@ const DaySection: React.FC<DaySectionProps> = ({
           transform: scale(0.95);
         }
 
-        .empty-state-card {
+        .empty-state-card,
+        .deferred-media-state {
           padding: 4rem 1.5rem;
           text-align: center;
           background: var(--primary-light);
@@ -438,13 +465,40 @@ const DaySection: React.FC<DaySectionProps> = ({
           border: 1px dashed var(--border-color);
         }
 
+        .deferred-media-state {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 0.65rem;
+        }
+
+        .loading-state-inline {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          padding: 2rem;
+          gap: 0.75rem;
+        }
+
+        .spinner {
+          animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+
         @media (max-width: 640px) {
           .card-title {
             font-size: 2.25rem;
           }
+
           .card-body-text {
             font-size: 1.15rem;
           }
+
           .journal-card {
             padding: 2rem 1.5rem;
           }

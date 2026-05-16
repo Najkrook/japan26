@@ -146,11 +146,11 @@ afterEach(() => {
 });
 
 describe('App map lightbox opening', () => {
-  it('opens map media through the same lightbox flow as the journal', () => {
+  it('opens map media through the same lightbox flow as the journal', async () => {
     render(<App />);
 
     fireEvent.click(screen.getByTestId('open-map-tab'));
-    fireEvent.click(screen.getByTestId('map-open-lightbox'));
+    fireEvent.click(await screen.findByTestId('map-open-lightbox'));
 
     expect(mockWarmLightboxPhotos).toHaveBeenCalledWith(mapMediaList, 0);
     expect(renderOrder[0]).toBe('preload');

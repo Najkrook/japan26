@@ -1,25 +1,48 @@
-import { useState, useCallback, useMemo, useEffect } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion, useScroll, useSpring, useTransform } from 'framer-motion';
-import { Image as ImageIcon, Loader2, X, Trash2, AlertTriangle } from 'lucide-react';
+import { AlertTriangle, Image as ImageIcon, Loader2, Trash2, X } from 'lucide-react';
 import AdminLogin from './components/AdminLogin';
+import BottomNav, { type TabType } from './components/BottomNav';
 import DaySection from './components/DaySection';
 import Header from './components/Header';
 import Lightbox from './components/Lightbox';
 import NamePrompt from './components/NamePrompt';
 import SakuraBackground from './components/SakuraBackground';
-import UploadPanel from './components/UploadPanel';
-import DayEditor from './components/DayEditor';
-import BottomNav, { type TabType } from './components/BottomNav';
-import MapTab from './components/MapTab';
-import StampBook from './components/StampBook';
 import { useAdmin } from './hooks/useAdmin';
 import { useDays } from './hooks/useDays';
+import { useMaintenance } from './hooks/useMaintenance';
 import { useMediaActions } from './hooks/useMediaActions';
 import { useUserName } from './hooks/useUserName';
-import { useAllMedia } from './hooks/useAllMedia';
-import { useMaintenance } from './hooks/useMaintenance';
 import type { Media } from './types';
+import { DEFAULT_MAP_CENTER, type MapCoordinate } from './utils/mapMedia';
 import { warmLightboxPhotos } from './utils/imagePreload';
+
+/* swedish-integrity: V\u00c3\u00a4lkommen till resedagboken | H\u00c3\u00a4mtar minnen... */
+
+const DayEditor = lazy(() => import('./components/DayEditor'));
+const MapTab = lazy(() => import('./components/MapTab'));
+const StampBook = lazy(() => import('./components/StampBook'));
+const UploadPanel = lazy(() => import('./components/UploadPanel'));
+
+interface MapViewState {
+  center: MapCoordinate;
+  zoom: number;
+}
+
+const readMediaPreference = (query: string) => {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+    return false;
+  }
+
+  return window.matchMedia(query).matches;
+};
+
+const InlineLoader = ({ copy }: { copy: string }) => (
+  <div className="loading-state-inline">
+    <Loader2 className="spinner" size={20} />
+    <p>{copy}</p>
+  </div>
+);
 
 function App() {
   const welcomeLabel = 'V\u00e4lkommen till resedagboken';
@@ -28,8 +51,16 @@ function App() {
   const { isAdmin, canPost, authorizationError, loading: authLoading, loginWithGoogle } = useAdmin();
   const { days, loading: daysLoading, createDay, updateDay, deleteDay, ensureDay } = useDays();
   const { deleteMedia } = useMediaActions();
-  const { media: allMedia } = useAllMedia();
-  const { orphanedMedia, isCleaning, lastCleanCount, lastFailCount, cleanupOrphanedMedia } = useMaintenance(days, allMedia);
+  const {
+    orphanedMedia,
+    isScanning,
+    isCleaning,
+    lastCleanCount,
+    lastFailCount,
+    scanError,
+    scanOrphanedMedia,
+    cleanupOrphanedMedia,
+  } = useMaintenance(days);
 
   const [activeDayId, setActiveDayId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<TabType>('journal');
@@ -40,8 +71,11 @@ function App() {
   const [loginError, setLoginError] = useState<string | null>(null);
   const [isAdminPanelOpen, setIsAdminPanelOpen] = useState(false);
   const [isStampBookOpen, setIsStampBookOpen] = useState(false);
+  const [mapView, setMapView] = useState<MapViewState | null>(null);
+  const [isMobilePerformanceMode, setIsMobilePerformanceMode] = useState(() =>
+    readMediaPreference('(pointer: coarse)') || readMediaPreference('(prefers-reduced-motion: reduce)'),
+  );
 
-  // Theme Management
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
     return (localStorage.getItem('japan-journal-theme') as 'light' | 'dark') || 'light';
   });
@@ -51,17 +85,48 @@ function App() {
     localStorage.setItem('japan-journal-theme', theme);
   }, [theme]);
 
-  const toggleTheme = useCallback(() => {
-    setTheme(prev => prev === 'light' ? 'dark' : 'light');
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+      return undefined;
+    }
+
+    const coarsePointer = window.matchMedia('(pointer: coarse)');
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const updateMode = () => {
+      setIsMobilePerformanceMode(coarsePointer.matches || reducedMotion.matches);
+    };
+
+    updateMode();
+
+    if (typeof coarsePointer.addEventListener === 'function') {
+      coarsePointer.addEventListener('change', updateMode);
+      reducedMotion.addEventListener('change', updateMode);
+
+      return () => {
+        coarsePointer.removeEventListener('change', updateMode);
+        reducedMotion.removeEventListener('change', updateMode);
+      };
+    }
+
+    coarsePointer.addListener(updateMode);
+    reducedMotion.addListener(updateMode);
+
+    return () => {
+      coarsePointer.removeListener(updateMode);
+      reducedMotion.removeListener(updateMode);
+    };
   }, []);
 
-  // Tab Hibernation Effect
+  const toggleTheme = useCallback(() => {
+    setTheme((prev) => (prev === 'light' ? 'dark' : 'light'));
+  }, []);
+
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.hidden) {
-        document.title = 'Minnen från Japan... 🌸';
+        document.title = 'Minnen fran Japan...';
       } else {
-        document.title = 'Jojje i Japan ⛩️';
+        document.title = 'Jojje i Japan';
       }
     };
 
@@ -69,52 +134,38 @@ function App() {
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
   }, []);
 
-  // Lock scrolling when admin panel is open
   useEffect(() => {
     if (isAdminPanelOpen) {
       document.body.style.overflow = 'hidden';
     } else {
       document.body.style.overflow = '';
     }
+
     return () => {
       document.body.style.overflow = '';
     };
   }, [isAdminPanelOpen]);
 
-  // Animated scroll progress for the timeline
   const { scrollYProgress, scrollY } = useScroll();
-
-  // Apply a gentle spring physics for buttery smooth mobile scrolling
   const scaleY = useSpring(scrollYProgress, {
     stiffness: 100,
     damping: 30,
-    restDelta: 0.001
+    restDelta: 0.001,
   });
-
-  // Cinematic Hero Motion Values (Pixel-based for consistency)
   const heroOpacity = useTransform(scrollY, [0, 1000], [1, 0]);
   const heroScale = useTransform(scrollY, [0, 1200], [1, 1.15]);
   const heroY = useTransform(scrollY, [0, 1200], [0, -50]);
-  const yearY = useTransform(scrollY, [0, 1200], [0, -120]); // Deeper parallax shift
-  const kanjiOpacity = useTransform(scrollY, [100, 500, 900], [0, 0.05, 0]); // Ultra-gradual reveal
+  const yearY = useTransform(scrollY, [0, 1200], [0, -120]);
+  const kanjiOpacity = useTransform(scrollY, [100, 500, 900], [0, 0.05, 0]);
 
-  const selectedDay = useMemo(() =>
-    days.find((day) => day.id === activeDayId) ?? days[0] ?? null
-    , [days, activeDayId]);
+  const selectedDay = useMemo(
+    () => days.find((day) => day.id === activeDayId) ?? days[0] ?? null,
+    [days, activeDayId],
+  );
 
   const selectedMedia = selectedMediaIndex !== null ? lightboxMedia[selectedMediaIndex] ?? null : null;
-  const nextMediaItem =
-    selectedMediaIndex !== null ? lightboxMedia[selectedMediaIndex + 1] ?? null : null;
-  const prevMediaItem =
-    selectedMediaIndex !== null ? lightboxMedia[selectedMediaIndex - 1] ?? null : null;
-
-  // Cache the last selected media so the Lightbox stays mounted with the correct image when closed
-  const [lastSelectedMedia, setLastSelectedMedia] = useState<Media | null>(null);
-  useEffect(() => {
-    if (selectedMedia) {
-      setLastSelectedMedia(selectedMedia);
-    }
-  }, [selectedMedia]);
+  const nextMediaItem = selectedMediaIndex !== null ? lightboxMedia[selectedMediaIndex + 1] ?? null : null;
+  const prevMediaItem = selectedMediaIndex !== null ? lightboxMedia[selectedMediaIndex - 1] ?? null : null;
 
   const handleDayVisible = useCallback((dayId: string) => {
     setActiveDayId(dayId);
@@ -131,12 +182,15 @@ function App() {
     setLoginError(null);
     try {
       const authorizedProfile = await loginWithGoogle();
-      if (authorizedProfile) setShowAdminLogin(false);
-      else setLoginError('Saknar behörighet.');
+      if (authorizedProfile) {
+        setShowAdminLogin(false);
+      } else {
+        setLoginError('Saknar behorighet.');
+      }
     } catch (err: unknown) {
       const firebaseError = err as { code?: string; message?: string };
       console.error('[Auth] Login failed:', firebaseError.code, firebaseError.message);
-      setLoginError(`Inloggning misslyckades: ${firebaseError.code ?? 'Okänt fel'}`);
+      setLoginError(`Inloggning misslyckades: ${firebaseError.code ?? 'Okant fel'}`);
     } finally {
       setLoginLoading(false);
     }
@@ -173,11 +227,25 @@ function App() {
         onToggleTheme={toggleTheme}
       />
 
-      <div style={{ display: activeTab === 'map' ? 'block' : 'none', height: '100%' }}>
-        <MapTab isActive={activeTab === 'map'} onMediaOpen={handleOpenLightbox} />
-      </div>
+      {activeTab === 'map' && (
+        <Suspense
+          fallback={
+            <div className="loading-state">
+              <Loader2 className="spinner" />
+              <p>Laddar kartan...</p>
+            </div>
+          }
+        >
+          <MapTab
+            initialView={mapView ?? { center: DEFAULT_MAP_CENTER, zoom: 6 }}
+            hasPersistedView={mapView !== null}
+            onMediaOpen={handleOpenLightbox}
+            onViewChange={setMapView}
+          />
+        </Suspense>
+      )}
 
-      <div style={{ display: activeTab === 'journal' ? 'block' : 'none' }}>
+      {activeTab === 'journal' && (
         <main
           className="main-content"
           aria-label={welcomeLabel}
@@ -185,25 +253,28 @@ function App() {
         >
           <motion.div
             className="ethereal-cover"
-            style={{ opacity: heroOpacity, scale: heroScale, y: heroY }}
+            style={
+              isMobilePerformanceMode
+                ? undefined
+                : { opacity: heroOpacity, scale: heroScale, y: heroY }
+            }
           >
             <motion.div
               className="hero-kanji-bg"
-              style={{ opacity: kanjiOpacity }}
+              style={isMobilePerformanceMode ? undefined : { opacity: kanjiOpacity }}
             >
-              旅行日記
+              Japan Journal
             </motion.div>
             <h1 className="hero-title-main">Japan</h1>
             <motion.div
               className="hero-year-main"
-              style={{ y: yearY }}
+              style={isMobilePerformanceMode ? undefined : { y: yearY }}
             >
               2026
             </motion.div>
-            <p className="hero-tagline">Följ äventyret i Japan 🌸🗾🍙</p>
+            <p className="hero-tagline">Folj aventyret i Japan</p>
             <p className="hero-description-small">
-              「日本語がめちゃくちゃ上手なのか、それとも翻訳ツールの使い方を知ってるのか、<br />どっちにしても盛大な拍手ものです！<br />
-              頭いいってわかるように、ドヤ顔の絵文字を送ってね ;)」
+              En liten journal fran resan, fylld med bilder, platser och halsningar.
             </p>
           </motion.div>
 
@@ -223,52 +294,74 @@ function App() {
                     </div>
                     <div className="admin-body">
                       {isAdmin && (
-                        <DayEditor
+                        <Suspense fallback={<InlineLoader copy="Laddar adminverktyg..." />}>
+                          <DayEditor
+                            days={days}
+                            selectedDay={selectedDay}
+                            createDay={createDay}
+                            updateDay={updateDay}
+                            onSelectDay={(id) => setActiveDayId(id)}
+                          />
+                        </Suspense>
+                      )}
+                      <Suspense fallback={<InlineLoader copy="Laddar uppladdning..." />}>
+                        <UploadPanel
                           days={days}
                           selectedDay={selectedDay}
-                          createDay={createDay}
-                          updateDay={updateDay}
-                          onSelectDay={(id) => setActiveDayId(id)}
+                          ensureDay={ensureDay}
+                          onUploadComplete={(id) => setActiveDayId(id)}
                         />
-                      )}
-                      <UploadPanel
-                        days={days}
-                        selectedDay={selectedDay}
-                        ensureDay={ensureDay}
-                        onUploadComplete={(id) => setActiveDayId(id)}
-                      />
+                      </Suspense>
 
-                      {isAdmin && orphanedMedia.length > 0 && (
+                      {isAdmin && (
                         <div className="maintenance-section">
                           <div className="maintenance-header">
                             <AlertTriangle size={16} className="warning-icon" />
-                            <h4>Systemunderhåll</h4>
+                            <h4>Systemunderhall</h4>
                           </div>
-                          <p>Hittade {orphanedMedia.length} föräldralösa bilder som saknar en dag.</p>
-                          <button
-                            className="cleanup-btn"
-                            onClick={() => {
-                              if (window.confirm(`Vill du permanent radera ${orphanedMedia.length} bilder? Detta kan inte ångras.`)) {
-                                cleanupOrphanedMedia();
-                              }
-                            }}
-                            disabled={isCleaning}
-                          >
-                            <Trash2 size={16} />
-                            {isCleaning ? 'Rensar...' : 'Rensa föräldralösa bilder'}
-                          </button>
+                          <p>Skanna efter media som inte langre hor till en dag innan du rensar.</p>
+                          <div className="maintenance-actions">
+                            <button
+                              className="cleanup-btn secondary"
+                              onClick={() => {
+                                void scanOrphanedMedia();
+                              }}
+                              disabled={isScanning || isCleaning}
+                            >
+                              <AlertTriangle size={16} />
+                              {isScanning ? 'Skannar...' : 'Skanna media'}
+                            </button>
+                            {orphanedMedia.length > 0 && (
+                              <button
+                                className="cleanup-btn"
+                                onClick={() => {
+                                  if (window.confirm(`Vill du permanent radera ${orphanedMedia.length} bilder? Detta kan inte angras.`)) {
+                                    void cleanupOrphanedMedia();
+                                  }
+                                }}
+                                disabled={isCleaning}
+                              >
+                                <Trash2 size={16} />
+                                {isCleaning ? 'Rensar...' : `Rensa ${orphanedMedia.length} foraldralosa bilder`}
+                              </button>
+                            )}
+                          </div>
+                          {scanError && <p className="maintenance-error">{scanError}</p>}
+                          {orphanedMedia.length > 0 && (
+                            <p>Hittade {orphanedMedia.length} foraldralosa bilder som saknar en dag.</p>
+                          )}
                         </div>
                       )}
 
                       {lastCleanCount !== null && (
                         <div className="maintenance-success fade-in">
                           {lastFailCount === null ? (
-                            <>✅ {lastCleanCount} bilder har raderats permanent.</>
+                            <>âœ… {lastCleanCount} bilder har raderats permanent.</>
                           ) : (
                             <>
-                              ⚠️ {lastCleanCount} raderade, {lastFailCount} misslyckades.
+                              {lastCleanCount} raderade, {lastFailCount} misslyckades.
                               <span style={{ display: 'block', fontSize: '0.75rem', marginTop: '0.25rem', fontWeight: 400 }}>
-                                Prova att rensa igen eller kontakta support om felet kvarstår.
+                                Prova att rensa igen eller kontakta support om felet kvarstar.
                               </span>
                             </>
                           )}
@@ -292,8 +385,8 @@ function App() {
               )}
               {daysLoading ? (
                 <div className="ethereal-loading-state fade-in">
-                  <div className="sakura-spinner">🌸</div>
-                  <p>Hämtar tidslinjen...</p>
+                  <div className="sakura-spinner">*</div>
+                  <p>Hamtar tidslinjen...</p>
                 </div>
               ) : days.length > 0 ? (
                 <div className="days-list">
@@ -318,59 +411,48 @@ function App() {
                   <div className="empty-icon-container">
                     <ImageIcon size={32} />
                   </div>
-                  <h2>Ingen resa än</h2>
-                  <p>Börja med att ladda upp bilder för att starta din journal.</p>
+                  <h2>Ingen resa an</h2>
+                  <p>Borja med att ladda upp bilder for att starta din journal.</p>
                   <button
                     className="add-first-memory-btn"
                     onClick={() => setIsAdminPanelOpen(true)}
                   >
                     <ImageIcon size={18} />
-                    Lägg till första minnet
+                    Lagg till forsta minnet
                   </button>
                 </div>
               )}
             </section>
           </div>
         </main>
-      </div>
+      )}
 
       <BottomNav activeTab={activeTab} onTabChange={setActiveTab} />
 
-      <div
-        aria-hidden={!selectedMedia}
-        style={{
-          position: 'fixed',
-          inset: 0,
-          zIndex: 3000,
-          opacity: selectedMedia ? 1 : 0,
-          visibility: selectedMedia ? 'visible' : 'hidden',
-          pointerEvents: selectedMedia ? 'auto' : 'none',
-          transition: 'opacity 0.3s cubic-bezier(0.16, 1, 0.3, 1), visibility 0.3s'
-        }}
-      >
-        {lastSelectedMedia && (
+      <AnimatePresence>
+        {selectedMedia && (
           <Lightbox
-            item={selectedMedia || lastSelectedMedia}
+            item={selectedMedia}
             nextItem={nextMediaItem ?? undefined}
             prevItem={prevMediaItem ?? undefined}
             mediaIndex={selectedMediaIndex ?? 0}
             mediaCount={lightboxMedia.length}
-            userName={userName || 'Besökare'}
-            isOpen={!!selectedMedia}
+            userName={userName || 'Besokare'}
+            isOpen
             onClose={() => setSelectedMediaIndex(null)}
             onNext={
               selectedMediaIndex !== null && selectedMediaIndex < lightboxMedia.length - 1
-                ? () => setSelectedMediaIndex((curr) => curr !== null ? curr + 1 : null)
+                ? () => setSelectedMediaIndex((curr) => (curr !== null ? curr + 1 : null))
                 : undefined
             }
             onPrev={
               selectedMediaIndex !== null && selectedMediaIndex > 0
-                ? () => setSelectedMediaIndex((curr) => curr !== null ? curr - 1 : null)
+                ? () => setSelectedMediaIndex((curr) => (curr !== null ? curr - 1 : null))
                 : undefined
             }
           />
         )}
-      </div>
+      </AnimatePresence>
 
       <AnimatePresence>
         {showAdminLogin && (
@@ -383,12 +465,15 @@ function App() {
         )}
       </AnimatePresence>
 
-      <StampBook
-        isOpen={isStampBookOpen}
-        onClose={() => setIsStampBookOpen(false)}
-        days={days}
-        media={allMedia}
-      />
+      {isStampBookOpen && (
+        <Suspense fallback={null}>
+          <StampBook
+            isOpen={isStampBookOpen}
+            onClose={() => setIsStampBookOpen(false)}
+            days={days}
+          />
+        </Suspense>
+      )}
 
       <style>{`
         .admin-panel-overlay {
@@ -427,6 +512,12 @@ function App() {
           padding-bottom: 1rem;
           border-bottom: 1px solid var(--border-color);
         }
+
+        .admin-body {
+          display: flex;
+          flex-direction: column;
+        }
+
         .ethereal-cover {
           text-align: center;
           padding: 8rem 0 6rem;
@@ -434,7 +525,7 @@ function App() {
           display: flex;
           flex-direction: column;
           align-items: center;
-          overflow: hidden; /* Prevent huge kanji from causing overflow */
+          overflow: hidden;
           width: 100%;
         }
 
@@ -469,7 +560,7 @@ function App() {
           font-size: clamp(2rem, 5vw, 3.5rem);
           color: var(--primary);
           letter-spacing: 0.6em;
-          margin: 5rem 0 3rem; /* Significantly increased top margin to prevent overlap */
+          margin: 5rem 0 3rem;
           padding-left: 0.6em;
           font-weight: 700;
           position: relative;
@@ -555,13 +646,22 @@ function App() {
           background: var(--primary-hover, #9E0026);
         }
 
-        .ethereal-loading-state {
+        .ethereal-loading-state,
+        .loading-state-inline {
           display: flex;
           flex-direction: column;
           align-items: center;
           justify-content: center;
+          gap: 1rem;
+        }
+
+        .ethereal-loading-state {
           padding: 6rem 2rem;
           gap: 1.5rem;
+        }
+
+        .loading-state-inline {
+          padding: 1rem 0;
         }
 
         .sakura-spinner {
@@ -585,7 +685,7 @@ function App() {
 
         .timeline-fill {
           position: absolute;
-          left: 1.5rem; /* Match index.css */
+          left: 1.5rem;
           top: 0;
           bottom: 0;
           width: 1px;
@@ -607,6 +707,68 @@ function App() {
           letter-spacing: 0.05em;
           font-style: italic;
           animation: pulse-opacity 2s ease-in-out infinite;
+        }
+
+        .maintenance-section {
+          margin-top: 1.5rem;
+          padding: 1rem 1.1rem;
+          border-radius: var(--radius-md);
+          border: 1px solid rgba(188, 0, 45, 0.14);
+          background: rgba(188, 0, 45, 0.04);
+        }
+
+        .maintenance-header {
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+          margin-bottom: 0.5rem;
+        }
+
+        .maintenance-actions {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 0.75rem;
+          margin: 0.75rem 0;
+        }
+
+        .cleanup-btn {
+          display: inline-flex;
+          align-items: center;
+          gap: 0.45rem;
+          padding: 0.75rem 1rem;
+          border-radius: var(--radius-sm);
+          background: var(--primary);
+          color: white;
+          font-weight: 600;
+        }
+
+        .cleanup-btn.secondary {
+          background: transparent;
+          border: 1px solid var(--border-color);
+          color: var(--text-main);
+        }
+
+        .cleanup-btn:disabled {
+          opacity: 0.6;
+          cursor: not-allowed;
+        }
+
+        .maintenance-error {
+          color: #9b2c2c;
+          font-size: 0.9rem;
+        }
+
+        .maintenance-success {
+          margin-top: 1rem;
+          padding: 0.85rem 1rem;
+          border-radius: var(--radius-sm);
+          background: rgba(47, 133, 90, 0.1);
+          color: #2f855a;
+          font-weight: 600;
+        }
+
+        .warning-icon {
+          color: var(--primary);
         }
 
         @keyframes pulse-opacity {

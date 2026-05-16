@@ -2,6 +2,8 @@ import type { Media } from '../types';
 
 const loadedImageUrls = new Set<string>();
 const pendingImageLoads = new Map<string, Promise<void>>();
+const preloadOrder: string[] = [];
+const MAX_PRELOADED_IMAGES = 48;
 
 const normalizeUrl = (url?: string | null): string | null => {
   if (typeof url !== 'string') {
@@ -48,7 +50,16 @@ export const preloadImageUrl = (url?: string | null): Promise<void> => {
 
     const markReady = () => {
       cleanup();
+      if (!loadedImageUrls.has(normalizedUrl)) {
+        preloadOrder.push(normalizedUrl);
+      }
       loadedImageUrls.add(normalizedUrl);
+      while (preloadOrder.length > MAX_PRELOADED_IMAGES) {
+        const evictedUrl = preloadOrder.shift();
+        if (evictedUrl) {
+          loadedImageUrls.delete(evictedUrl);
+        }
+      }
       pendingImageLoads.delete(normalizedUrl);
       resolve();
     };
@@ -100,4 +111,5 @@ export const warmLightboxPhotos = (media: Media[], index: number) => {
 export const resetImagePreloadCache = () => {
   loadedImageUrls.clear();
   pendingImageLoads.clear();
+  preloadOrder.length = 0;
 };

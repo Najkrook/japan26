@@ -19,10 +19,9 @@ import { formatDateKey, formatDateSwedish } from '../utils/dateHelpers';
 import {
   compressImage,
   convertHeicToJpeg,
-  createThumbnail,
   detectMediaKind,
   extractCapturedAt,
-  readMediaDimensions,
+  preparePhotoArtifacts,
   type CapturedAtSource,
   type MediaKind,
 } from '../utils/mediaProcessing';
@@ -82,6 +81,8 @@ const SUPPORTED_IMAGE_EXTENSIONS = new Set([
   '.heic',
   '.heif',
 ]);
+const MOBILE_PREPARE_CONCURRENCY = 1;
+const DESKTOP_PREPARE_CONCURRENCY = 2;
 
 const STATUS_LABELS: Record<UploadStatus, string> = {
   preparing: 'Forbereder',
@@ -191,6 +192,12 @@ const UploadPanel: React.FC<UploadPanelProps> = ({ ensureDay, onUploadComplete }
   const [error, setError] = useState<string | null>(null);
   const [batchSummary, setBatchSummary] = useState<BatchSummary | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const prepareConcurrency =
+    typeof window !== 'undefined' &&
+    typeof window.matchMedia === 'function' &&
+    window.matchMedia('(pointer: coarse)').matches
+      ? MOBILE_PREPARE_CONCURRENCY
+      : DESKTOP_PREPARE_CONCURRENCY;
 
   const updateQueueItem = (itemId: string, updater: (item: UploadQueueItem) => UploadQueueItem) => {
     setQueue((currentQueue) => currentQueue.map((item) => (item.id === itemId ? updater(item) : item)));
@@ -230,8 +237,9 @@ const UploadPanel: React.FC<UploadPanelProps> = ({ ensureDay, onUploadComplete }
 
     if (!isVideo) {
       try {
-        dimensions = await readMediaDimensions(compressedFile, kind);
-        thumbnailBlob = await createThumbnail(compressedFile, kind);
+        const photoArtifacts = await preparePhotoArtifacts(compressedFile);
+        dimensions = photoArtifacts.dimensions;
+        thumbnailBlob = photoArtifacts.thumbnailBlob;
       } catch (thumbnailError) {
         console.warn('Thumbnail generation failed, continuing without thumbnail.', thumbnailError);
       }
@@ -288,34 +296,39 @@ const UploadPanel: React.FC<UploadPanelProps> = ({ ensureDay, onUploadComplete }
 
     setQueue((currentQueue) => [...currentQueue, ...placeholderItems]);
 
-    await Promise.all(
-      placeholderItems.map(async (placeholder, index) => {
-        const validationError = validateFileForUpload(placeholder.file, currentQueueCount, index);
+    for (let startIndex = 0; startIndex < placeholderItems.length; startIndex += prepareConcurrency) {
+      const batch = placeholderItems.slice(startIndex, startIndex + prepareConcurrency);
 
-        if (validationError) {
-          updateQueueItem(placeholder.id, (item) => ({
-            ...item,
-            status: 'prepareFailed',
-            error: validationError,
-          }));
-          return;
-        }
+      await Promise.all(
+        batch.map(async (placeholder, batchIndex) => {
+          const selectionIndex = startIndex + batchIndex;
+          const validationError = validateFileForUpload(placeholder.file, currentQueueCount, selectionIndex);
 
-        try {
-          const preparedItem = await prepareFile(placeholder.file, placeholder.id);
-          updateQueueItem(placeholder.id, () => preparedItem);
-        } catch (preparationError) {
-          updateQueueItem(placeholder.id, (item) => ({
-            ...item,
-            status: 'prepareFailed',
-            error:
-              preparationError instanceof Error
-                ? preparationError.message
-                : 'Kunde inte forbereda filen.',
-          }));
-        }
-      }),
-    );
+          if (validationError) {
+            updateQueueItem(placeholder.id, (item) => ({
+              ...item,
+              status: 'prepareFailed',
+              error: validationError,
+            }));
+            return;
+          }
+
+          try {
+            const preparedItem = await prepareFile(placeholder.file, placeholder.id);
+            updateQueueItem(placeholder.id, () => preparedItem);
+          } catch (preparationError) {
+            updateQueueItem(placeholder.id, (item) => ({
+              ...item,
+              status: 'prepareFailed',
+              error:
+                preparationError instanceof Error
+                  ? preparationError.message
+                  : 'Kunde inte forbereda filen.',
+            }));
+          }
+        }),
+      );
+    }
 
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
