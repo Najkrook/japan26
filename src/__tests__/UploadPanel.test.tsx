@@ -306,7 +306,7 @@ describe('UploadPanel lifecycle', () => {
     const input = document.querySelector('input[type="file"]') as HTMLInputElement;
     fireEvent.change(input, { target: { files: [goodFile, badFile] } });
 
-    await screen.findByText('Filtypen stod inte pa listan over stodda uppladdningar.');
+    await screen.findByText('Filtypen stöds inte.');
     fireEvent.click(screen.getByRole('button', { name: 'Ladda upp 1 filer' }));
 
     await waitFor(() => expect(mockSetDoc).toHaveBeenCalledTimes(1));
@@ -342,12 +342,12 @@ describe('UploadPanel lifecycle', () => {
     await screen.findByRole('button', { name: 'Ladda upp 1 filer' });
     fireEvent.click(screen.getByRole('button', { name: 'Ladda upp 1 filer' }));
 
-    await screen.findByRole('button', { name: 'Forsok igen' });
+    await screen.findByRole('button', { name: 'Försök igen' });
     expect(mockDeleteObject).toHaveBeenCalledTimes(2);
     expect(mockDeleteDoc).toHaveBeenCalledTimes(1);
-    expect(screen.getByText('0 klara, 1 behovde ett nytt forsok.')).toBeTruthy();
+    expect(screen.getByText('0 klara, 1 behövde ett nytt försök.')).toBeTruthy();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Forsok igen' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Försök igen' }));
     fireEvent.click(screen.getByRole('button', { name: 'Ladda upp 1 filer' }));
 
     await waitFor(() => expect(mockSetDoc).toHaveBeenCalledTimes(2));

@@ -30,6 +30,31 @@ interface DaySectionContentProps {
   onDeleteMedia?: (item: Media) => Promise<void>;
 }
 
+const MediaLoadingPreview = ({ copy }: { copy: string }) => (
+  <div className="media-loading-state" aria-label={copy}>
+    <div className="media-preview-skeleton" aria-hidden="true">
+      <div className="media-skeleton-tile media-skeleton-feature" />
+      <div className="media-skeleton-tile" />
+      <div className="media-skeleton-tile" />
+    </div>
+    <div className="loading-state-inline">
+      <Loader2 className="spinner" size={24} />
+      <p>{copy}</p>
+    </div>
+  </div>
+);
+
+const DeferredMediaPreview = () => (
+  <div className="deferred-media-state">
+    <div className="media-preview-skeleton" aria-hidden="true">
+      <div className="media-skeleton-tile media-skeleton-feature" />
+      <div className="media-skeleton-tile" />
+      <div className="media-skeleton-tile" />
+    </div>
+    <p>Bilderna laddas när du närmar dig dagen.</p>
+  </div>
+);
+
 const DaySectionContent: React.FC<DaySectionContentProps> = ({
   dayId,
   mode,
@@ -44,10 +69,7 @@ const DaySectionContent: React.FC<DaySectionContentProps> = ({
     <>
       <div className="card-media">
         {mediaLoading ? (
-          <div className="loading-state-inline">
-            <Loader2 className="spinner" size={24} />
-            <p>Hämtar minnen...</p>
-          </div>
+          <MediaLoadingPreview copy="Hämtar minnen..." />
         ) : media.length > 0 ? (
           <MediaGrid
             media={media}
@@ -85,6 +107,7 @@ const DaySection: React.FC<DaySectionProps> = ({
   onDeleteMedia,
 }) => {
   const [hasAnimated, setHasAnimated] = useState(false);
+  const [hasActivatedContent, setHasActivatedContent] = useState(isActive);
   const [isEditingText, setIsEditingText] = useState(false);
   const [draftText, setDraftText] = useState(day.description || '');
   const [draftLocation, setDraftLocation] = useState(day.location || '');
@@ -98,19 +121,30 @@ const DaySection: React.FC<DaySectionProps> = ({
       }
     },
   });
-  const { ref: nearViewportRef, inView: isNearViewport } = useInView({
+  const { ref: nearViewportRef } = useInView({
     rootMargin: '200% 0px 200% 0px',
+    onChange: (visible) => {
+      if (visible) {
+        setHasActivatedContent(true);
+      }
+    },
   });
+
+  React.useEffect(() => {
+    if (isActive) {
+      setHasActivatedContent(true);
+    }
+  }, [isActive]);
 
   const setRefs = React.useCallback(
     (node: HTMLDivElement | null) => {
       activeRef(node);
       nearViewportRef(node);
     },
-    [activeRef, nearViewportRef],
+    [activeRef, nearViewportRef]
   );
 
-  const contentMode: DataLoadMode = isActive ? 'live' : isNearViewport ? 'once' : 'off';
+  const contentMode: DataLoadMode = isActive ? 'live' : hasActivatedContent ? 'once' : 'off';
   const shouldMountContent = contentMode !== 'off';
 
   const handleSaveText = async () => {
@@ -131,13 +165,29 @@ const DaySection: React.FC<DaySectionProps> = ({
   };
 
   const handleDeleteDay = async () => {
-    if (onDeleteDay && window.confirm('Är du säker på att du vill ta bort hela denna dag? Detta kan inte ångras.')) {
+    if (
+      onDeleteDay &&
+      window.confirm('Är du säker på att du vill ta bort hela denna dag? Detta kan inte ångras.')
+    ) {
       await onDeleteDay(day.id);
     }
   };
 
   const dateObj = day.date;
-  const monthNames = ['Januari', 'Februari', 'Mars', 'April', 'Maj', 'Juni', 'Juli', 'Augusti', 'September', 'Oktober', 'November', 'December'];
+  const monthNames = [
+    'Januari',
+    'Februari',
+    'Mars',
+    'April',
+    'Maj',
+    'Juni',
+    'Juli',
+    'Augusti',
+    'September',
+    'Oktober',
+    'November',
+    'December',
+  ];
   const dateStr = `${dateObj.getDate()} ${monthNames[dateObj.getMonth()]}`;
   const locationStr = day.location ? ` — ${day.location}` : '';
   const dateFormatted = `${dateStr}${locationStr}`;
@@ -164,7 +214,7 @@ const DaySection: React.FC<DaySectionProps> = ({
             <button
               className="card-delete-trigger"
               onClick={handleDeleteDay}
-              title="Ta bort inlagg"
+              title="Ta bort inlägg"
             >
               <X size={20} />
             </button>
@@ -235,10 +285,7 @@ const DaySection: React.FC<DaySectionProps> = ({
           />
         ) : (
           <div className="card-media">
-            <div className="deferred-media-state">
-              <ImageIcon size={24} />
-              <p>Media laddas när kortet kommer närmare.</p>
-            </div>
+            <DeferredMediaPreview />
           </div>
         )}
       </article>
@@ -455,8 +502,45 @@ const DaySection: React.FC<DaySectionProps> = ({
           transform: scale(0.95);
         }
 
-        .empty-state-card,
+        .card-media {
+          display: flex;
+          flex-direction: column;
+          gap: 0.9rem;
+        }
+
+        .media-loading-state,
         .deferred-media-state {
+          display: flex;
+          flex-direction: column;
+          gap: 0.9rem;
+        }
+
+        .media-preview-skeleton {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 0.75rem;
+        }
+
+        .media-skeleton-tile {
+          aspect-ratio: 1 / 1;
+          border-radius: var(--radius-md);
+          background:
+            linear-gradient(
+              110deg,
+              rgba(188, 0, 45, 0.08) 8%,
+              rgba(188, 0, 45, 0.16) 18%,
+              rgba(188, 0, 45, 0.08) 33%
+            );
+          background-size: 200% 100%;
+          animation: shimmer 1.8s linear infinite;
+        }
+
+        .media-skeleton-feature {
+          grid-column: 1 / -1;
+          aspect-ratio: 16 / 9;
+        }
+
+        .empty-state-card {
           padding: 4rem 1.5rem;
           text-align: center;
           background: var(--primary-light);
@@ -465,11 +549,10 @@ const DaySection: React.FC<DaySectionProps> = ({
           border: 1px dashed var(--border-color);
         }
 
-        .deferred-media-state {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          gap: 0.65rem;
+        .deferred-media-state p,
+        .loading-state-inline p {
+          text-align: center;
+          color: var(--text-dim);
         }
 
         .loading-state-inline {
@@ -477,8 +560,8 @@ const DaySection: React.FC<DaySectionProps> = ({
           flex-direction: column;
           align-items: center;
           justify-content: center;
-          padding: 2rem;
           gap: 0.75rem;
+          padding: 0.25rem 0 0;
         }
 
         .spinner {
@@ -486,8 +569,19 @@ const DaySection: React.FC<DaySectionProps> = ({
         }
 
         @keyframes spin {
-          from { transform: rotate(0deg); }
-          to { transform: rotate(360deg); }
+          from {
+            transform: rotate(0deg);
+          }
+
+          to {
+            transform: rotate(360deg);
+          }
+        }
+
+        @keyframes shimmer {
+          to {
+            background-position-x: -200%;
+          }
         }
 
         @media (max-width: 640px) {
