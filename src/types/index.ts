@@ -55,6 +55,12 @@ export interface UpdateDayInput {
   itinerary?: string;
 }
 
+export interface JournalDayData {
+  day: Day;
+  media: Media[];
+  commentCounts: Record<string, number>;
+}
+
 export type UserRole = 'admin' | 'poster';
 
 export interface HardcodedAccountProfile {

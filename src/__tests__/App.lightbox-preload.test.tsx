@@ -62,6 +62,20 @@ vi.mock('../hooks/useDays', () => ({
   }),
 }));
 
+vi.mock('../hooks/useJournalTimelineData', () => ({
+  useJournalTimelineData: () => ({
+    dayEntries: [
+      {
+        day: days[0],
+        media: mediaList,
+        commentCounts: {},
+      },
+    ],
+    loading: false,
+    error: null,
+  }),
+}));
+
 vi.mock('../components/Header', () => ({
   default: () => <div data-testid="mock-header" />,
 }));

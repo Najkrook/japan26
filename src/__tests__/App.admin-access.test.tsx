@@ -36,9 +36,9 @@ vi.mock('../hooks/useDays', () => ({
   }),
 }));
 
-vi.mock('../hooks/useAllMedia', () => ({
-  useAllMedia: () => ({
-    media: [],
+vi.mock('../hooks/useJournalTimelineData', () => ({
+  useJournalTimelineData: () => ({
+    dayEntries: [],
     loading: false,
     error: null,
   }),

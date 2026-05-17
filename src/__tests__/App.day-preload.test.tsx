@@ -1,7 +1,7 @@
 import React from 'react';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Day } from '../types';
+import type { Day, JournalDayData, Media } from '../types';
 
 const days: Day[] = [
   {
@@ -16,13 +16,27 @@ const days: Day[] = [
     dateKey: '2026-04-16',
     title: 'Kyoto',
   },
-  {
-    id: 'day-3',
-    date: new Date('2026-04-17T00:00:00Z'),
-    dateKey: '2026-04-17',
-    title: 'Osaka',
-  },
 ];
+
+const mediaFixture = (dayId: string, id: string): Media => ({
+  id,
+  dayId,
+  type: 'photo',
+  url: `https://example.com/${id}.jpg`,
+  thumbnailUrl: `https://example.com/${id}-thumb.jpg`,
+  storagePath: `media/${dayId}/${id}.jpg`,
+  fileName: `${id}.jpg`,
+  capturedAt: new Date('2026-04-15T10:00:00Z'),
+  width: 1600,
+  height: 900,
+});
+
+const mockUseJournalTimelineData = vi.fn();
+const mockDeleteMedia = vi.fn();
+
+vi.mock('../hooks/useJournalTimelineData', () => ({
+  useJournalTimelineData: (...args: unknown[]) => mockUseJournalTimelineData(...args),
+}));
 
 vi.mock('../hooks/useUserName', () => ({
   useUserName: () => ({
@@ -68,7 +82,7 @@ vi.mock('../hooks/useMaintenance', () => ({
 
 vi.mock('../hooks/useMediaActions', () => ({
   useMediaActions: () => ({
-    deleteMedia: vi.fn(),
+    deleteMedia: mockDeleteMedia,
   }),
 }));
 
@@ -115,15 +129,11 @@ vi.mock('../components/StampBook', () => ({
 vi.mock('../components/DaySection', () => ({
   default: ({
     day,
-    isActive,
-    isPreviousAdjacent,
-    isNextAdjacent,
+    media,
     onVisible,
   }: {
     day: Day;
-    isActive: boolean;
-    isPreviousAdjacent: boolean;
-    isNextAdjacent: boolean;
+    media: Media[];
     onVisible: (dayId: string) => void;
   }) => (
     <button
@@ -131,9 +141,7 @@ vi.mock('../components/DaySection', () => ({
       data-testid={`day-section-${day.id}`}
       onClick={() => onVisible(day.id)}
     >
-      {`${day.id}:${isActive ? 'active' : 'inactive'}:${
-        isPreviousAdjacent ? 'previous-adjacent' : isNextAdjacent ? 'next-adjacent' : 'not-adjacent'
-      }`}
+      {`${day.id}:${media.map((item) => item.id).join(',') || 'empty'}`}
     </button>
   ),
 }));
@@ -153,6 +161,28 @@ vi.mock('framer-motion', () => ({
 import App from '../App';
 
 beforeEach(() => {
+  mockDeleteMedia.mockReset();
+  mockUseJournalTimelineData.mockReset();
+
+  const journalDayEntries: JournalDayData[] = [
+    {
+      day: days[0],
+      media: [mediaFixture('day-1', 'media-1')],
+      commentCounts: { 'media-1': 2 },
+    },
+    {
+      day: days[1],
+      media: [mediaFixture('day-2', 'media-2')],
+      commentCounts: { 'media-2': 1 },
+    },
+  ];
+
+  mockUseJournalTimelineData.mockReturnValue({
+    dayEntries: journalDayEntries,
+    loading: false,
+    error: null,
+  });
+
   Object.defineProperty(window, 'matchMedia', {
     configurable: true,
     writable: true,
@@ -173,18 +203,24 @@ afterEach(() => {
   cleanup();
 });
 
-describe('App adjacent day preloading', () => {
-  it('marks the previous and next days separately when a day becomes active', () => {
+describe('App journal timeline', () => {
+  it('renders the batch-loaded journal day data', () => {
     render(<App />);
 
-    expect(screen.getByTestId('day-section-day-1').textContent).toContain('not-adjacent');
-    expect(screen.getByTestId('day-section-day-2').textContent).toContain('not-adjacent');
-    expect(screen.getByTestId('day-section-day-3').textContent).toContain('not-adjacent');
+    expect(screen.getByTestId('day-section-day-1').textContent).toContain('media-1');
+    expect(screen.getByTestId('day-section-day-2').textContent).toContain('media-2');
+    expect(mockUseJournalTimelineData).toHaveBeenCalled();
+  });
+
+  it('recomputes timeline data when a day becomes active', () => {
+    render(<App />);
 
     fireEvent.click(screen.getByTestId('day-section-day-2'));
 
-    expect(screen.getByTestId('day-section-day-2').textContent).toContain('active:not-adjacent');
-    expect(screen.getByTestId('day-section-day-1').textContent).toContain('inactive:previous-adjacent');
-    expect(screen.getByTestId('day-section-day-3').textContent).toContain('inactive:next-adjacent');
+    const lastCall = mockUseJournalTimelineData.mock.calls.at(-1)?.[0] as {
+      activeDayId: string | null;
+    };
+
+    expect(lastCall.activeDayId).toBe('day-2');
   });
 });

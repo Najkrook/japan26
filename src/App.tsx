@@ -10,9 +10,9 @@ import NamePrompt from './components/NamePrompt';
 import SakuraBackground from './components/SakuraBackground';
 import { useAdmin } from './hooks/useAdmin';
 import { useDays } from './hooks/useDays';
+import { useJournalTimelineData } from './hooks/useJournalTimelineData';
 import { useMaintenance } from './hooks/useMaintenance';
 import { useMediaActions } from './hooks/useMediaActions';
-import { useScrollAnchor } from './hooks/useScrollAnchor';
 import { useUserName } from './hooks/useUserName';
 import type { Media } from './types';
 import { DEFAULT_MAP_CENTER, type MapCoordinate } from './utils/mapMedia';
@@ -72,6 +72,7 @@ function App() {
   const [loginError, setLoginError] = useState<string | null>(null);
   const [isAdminPanelOpen, setIsAdminPanelOpen] = useState(false);
   const [isStampBookOpen, setIsStampBookOpen] = useState(false);
+  const [journalRefreshKey, setJournalRefreshKey] = useState(0);
   const [mapView, setMapView] = useState<MapViewState | null>(null);
   const [isMobilePerformanceMode, setIsMobilePerformanceMode] = useState(() =>
     readMediaPreference('(pointer: coarse)') || readMediaPreference('(prefers-reduced-motion: reduce)'),
@@ -163,29 +164,15 @@ function App() {
     () => days.find((day) => day.id === activeDayId) ?? days[0] ?? null,
     [days, activeDayId],
   );
-  const activeDayIndex = useMemo(
-    () => days.findIndex((day) => day.id === activeDayId),
-    [days, activeDayId],
-  );
-  const previousAdjacentDayId = useMemo(
-    () => (activeDayIndex > 0 ? days[activeDayIndex - 1]?.id ?? null : null),
-    [days, activeDayIndex],
-  );
-  const nextAdjacentDayId = useMemo(
-    () =>
-      activeDayIndex >= 0 && activeDayIndex < days.length - 1
-        ? days[activeDayIndex + 1]?.id ?? null
-        : null,
-    [days, activeDayIndex],
-  );
-  const adjacentDayIds = useMemo(() => {
-    return new Set(
-      [previousAdjacentDayId, nextAdjacentDayId].filter((dayId): dayId is string => Boolean(dayId)),
-    );
-  }, [nextAdjacentDayId, previousAdjacentDayId]);
-  const { registerSectionRef } = useScrollAnchor({
+  const {
+    dayEntries: journalDayEntries,
+    loading: timelineDataLoading,
+    error: timelineDataError,
+  } = useJournalTimelineData({
+    days,
     activeDayId,
-    observedDayIds: adjacentDayIds,
+    enabled: activeTab === 'journal',
+    refreshKey: journalRefreshKey,
   });
 
   const selectedMedia = selectedMediaIndex !== null ? lightboxMedia[selectedMediaIndex] ?? null : null;
@@ -201,6 +188,19 @@ function App() {
     setLightboxMedia(mediaList);
     setSelectedMediaIndex(index);
   }, []);
+
+  const handleUploadComplete = useCallback((dayId: string) => {
+    setActiveDayId(dayId);
+    setJournalRefreshKey((current) => current + 1);
+  }, []);
+
+  const handleDeleteTimelineMedia = useCallback(
+    async (item: Media) => {
+      await deleteMedia(item);
+      setJournalRefreshKey((current) => current + 1);
+    },
+    [deleteMedia],
+  );
 
   const handleLogin = async () => {
     setLoginLoading(true);
@@ -335,7 +335,7 @@ function App() {
                           days={days}
                           selectedDay={selectedDay}
                           ensureDay={ensureDay}
-                          onUploadComplete={(id) => setActiveDayId(id)}
+                          onUploadComplete={handleUploadComplete}
                         />
                       </Suspense>
 
@@ -409,29 +409,33 @@ function App() {
                   />
                 </>
               )}
-              {daysLoading ? (
+              {daysLoading || timelineDataLoading ? (
                 <div className="ethereal-loading-state fade-in">
                   <div className="sakura-spinner">*</div>
                   <p>Hämtar tidslinjen...</p>
                 </div>
+              ) : timelineDataError ? (
+                <div className="empty-state-card fade-in">
+                  <div className="empty-icon-container">
+                    <AlertTriangle size={32} />
+                  </div>
+                  <h2>Kunde inte ladda journalen</h2>
+                  <p>{timelineDataError}</p>
+                </div>
               ) : days.length > 0 ? (
                 <div className="days-list">
-                  {days.map((day) => (
+                  {journalDayEntries.map(({ day, media, commentCounts }) => (
                     <DaySection
                       key={day.id}
                       day={day}
-                      isActive={activeDayId === day.id}
-                      isPreviousAdjacent={previousAdjacentDayId === day.id}
-                      isNextAdjacent={nextAdjacentDayId === day.id}
-                      onSectionRef={registerSectionRef}
+                      media={media}
+                      commentCounts={commentCounts}
                       isAdmin={isAdmin}
-                      canPost={canPost}
-                      authorizationError={authorizationError}
                       onVisible={handleDayVisible}
                       onMediaClick={handleOpenLightbox}
                       onUpdateDay={updateDay}
                       onDeleteDay={deleteDay}
-                      onDeleteMedia={deleteMedia}
+                      onDeleteMedia={handleDeleteTimelineMedia}
                     />
                   ))}
                 </div>

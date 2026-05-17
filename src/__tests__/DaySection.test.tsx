@@ -1,30 +1,23 @@
 import React from 'react';
-import { act, cleanup, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import DaySection from '../components/DaySection';
-import type { DataLoadMode, Day, Media } from '../types';
+import type { Day, Media } from '../types';
 
-const mockUseMedia = vi.fn();
-const mockUseDayCommentCounts = vi.fn();
 const activeObserverState: { onChange?: (visible: boolean) => void } = {};
-const nearObserverState: { onChange?: (visible: boolean) => void } = {};
-
-vi.mock('../hooks/useMedia', () => ({
-  useMedia: (...args: unknown[]) => mockUseMedia(...args),
-}));
-
-vi.mock('../hooks/useDayCommentCounts', () => ({
-  useDayCommentCounts: (...args: unknown[]) => mockUseDayCommentCounts(...args),
-}));
 
 vi.mock('../components/EmaBoard', () => ({
   default: ({ dayId }: { dayId: string }) => <div data-testid={`ema-board-${dayId}`} />,
 }));
 
 vi.mock('../components/MediaGrid', () => ({
-  default: ({ media }: { media: Media[] }) => (
-    <div data-testid="media-grid">MediaGrid:{media.length}</div>
-  ),
+  default: ({
+    media,
+    commentCounts,
+  }: {
+    media: Media[];
+    commentCounts: Record<string, number>;
+  }) => <div data-testid="media-grid">{`MediaGrid:${media.length}:${commentCounts['media-1'] ?? 0}`}</div>,
 }));
 
 vi.mock('framer-motion', () => ({
@@ -40,12 +33,7 @@ vi.mock('framer-motion', () => ({
 }));
 
 vi.mock('react-intersection-observer', () => ({
-  useInView: (options?: { rootMargin?: string; onChange?: (visible: boolean) => void }) => {
-    if (options?.rootMargin?.includes('200%')) {
-      nearObserverState.onChange = options.onChange;
-      return { ref: vi.fn() };
-    }
-
+  useInView: (options?: { onChange?: (visible: boolean) => void }) => {
     activeObserverState.onChange = options?.onChange;
     return { ref: vi.fn() };
   },
@@ -79,23 +67,14 @@ const renderSection = (overrides: Partial<React.ComponentProps<typeof DaySection
   render(
     <DaySection
       day={dayFixture}
-      isActive={false}
-      isPreviousAdjacent={false}
-      isNextAdjacent={false}
+      media={mediaFixture}
+      commentCounts={{ 'media-1': 2 }}
       isAdmin={false}
-      canPost={false}
-      authorizationError={null}
       onVisible={vi.fn()}
       onMediaClick={vi.fn()}
       {...overrides}
     />
   );
-
-const triggerNearViewport = (visible: boolean) => {
-  act(() => {
-    nearObserverState.onChange?.(visible);
-  });
-};
 
 const triggerActiveViewport = (visible: boolean) => {
   act(() => {
@@ -106,213 +85,42 @@ const triggerActiveViewport = (visible: boolean) => {
 describe('DaySection', () => {
   beforeEach(() => {
     activeObserverState.onChange = undefined;
-    nearObserverState.onChange = undefined;
-    mockUseMedia.mockReset();
-    mockUseDayCommentCounts.mockReset();
-
-    mockUseMedia.mockImplementation((_dayId: string, mode: DataLoadMode) => ({
-      media: mode === 'off' ? [] : mediaFixture,
-      loading: false,
-      error: null,
-    }));
-
-    mockUseDayCommentCounts.mockImplementation((_dayId: string, mode: DataLoadMode) => ({
-      counts: mode === 'off' ? {} : { 'media-1': 2 },
-      loading: false,
-    }));
   });
 
   afterEach(() => {
     cleanup();
   });
 
-  it('renders the deferred state for unseen days without adjacency', () => {
+  it('renders media directly from props without placeholder states', () => {
     renderSection();
 
-    expect(screen.getByText('Bilderna laddas när du närmar dig dagen.')).toBeTruthy();
+    expect(screen.getByTestId('media-grid').textContent).toBe('MediaGrid:1:2');
+    expect(screen.queryByText('Bilderna laddas när du närmar dig dagen.')).toBeNull();
+  });
+
+  it('renders an empty media state when the day has no images', () => {
+    renderSection({ media: [], commentCounts: {} });
+
+    expect(screen.getByText('Inga bilder än.')).toBeTruthy();
     expect(screen.queryByTestId('media-grid')).toBeNull();
-    expect(mockUseMedia).not.toHaveBeenCalled();
-    expect(mockUseDayCommentCounts).not.toHaveBeenCalled();
   });
 
-  it('uses once-mode when the day is previous-adjacent to the active day', () => {
-    renderSection({ isPreviousAdjacent: true });
-
-    expect(screen.getByTestId('media-grid')).toBeTruthy();
-    expect(mockUseMedia).toHaveBeenLastCalledWith('day-1', 'once');
-    expect(mockUseDayCommentCounts).toHaveBeenLastCalledWith('day-1', 'once');
-  });
-
-  it('shows the larger sakura preload state for the next day while media is loading', () => {
-    mockUseMedia.mockImplementation((_dayId: string, mode: DataLoadMode) => ({
-      media: [],
-      loading: mode !== 'off',
-      error: null,
-    }));
-
-    renderSection({ isNextAdjacent: true });
-
-    expect(screen.getByTestId('next-day-preload-state')).toBeTruthy();
-    expect(screen.getByText('Förbereder nästa dag...')).toBeTruthy();
-    expect(screen.getByText('Laddar bilderna innan du scrollar vidare.')).toBeTruthy();
-    expect(screen.getAllByTestId('media-skeleton-tile')).toHaveLength(9);
-    expect(mockUseMedia).toHaveBeenLastCalledWith('day-1', 'once');
-    expect(mockUseDayCommentCounts).toHaveBeenLastCalledWith('day-1', 'once');
-  });
-
-  it('swaps from next-day preload to the media grid once loading finishes', () => {
-    mockUseMedia.mockImplementation((_dayId: string, mode: DataLoadMode) => ({
-      media: [],
-      loading: mode !== 'off',
-      error: null,
-    }));
-
-    const { rerender } = renderSection({ isNextAdjacent: true });
-    expect(screen.getByTestId('next-day-preload-state')).toBeTruthy();
-
-    mockUseMedia.mockImplementation((_dayId: string, mode: DataLoadMode) => ({
-      media: mode === 'off' ? [] : mediaFixture,
-      loading: false,
-      error: null,
-    }));
-
-    rerender(
-      <DaySection
-        day={dayFixture}
-        isActive={false}
-        isPreviousAdjacent={false}
-        isNextAdjacent={true}
-        isAdmin={false}
-        canPost={false}
-        authorizationError={null}
-        onVisible={vi.fn()}
-        onMediaClick={vi.fn()}
-      />
-    );
-
-    expect(screen.queryByTestId('next-day-preload-state')).toBeNull();
-    expect(screen.getByTestId('media-grid')).toBeTruthy();
-  });
-
-  it('keeps the lighter loading state for the previous day while media is loading', () => {
-    mockUseMedia.mockImplementation((_dayId: string, mode: DataLoadMode) => ({
-      media: [],
-      loading: mode !== 'off',
-      error: null,
-    }));
-
-    renderSection({ isPreviousAdjacent: true });
-
-    expect(screen.getByText('Hämtar minnen...')).toBeTruthy();
-    expect(screen.queryByTestId('next-day-preload-state')).toBeNull();
-    expect(screen.getAllByTestId('media-skeleton-tile')).toHaveLength(1);
-  });
-
-  it('activates content with once-mode when the day enters the preload zone', () => {
-    renderSection();
-
-    triggerNearViewport(true);
-
-    expect(screen.getByTestId('media-grid')).toBeTruthy();
-    expect(mockUseMedia).toHaveBeenLastCalledWith('day-1', 'once');
-    expect(mockUseDayCommentCounts).toHaveBeenLastCalledWith('day-1', 'once');
-  });
-
-  it('keeps content mounted after a seen day leaves the preload zone', () => {
-    const { rerender } = renderSection();
-
-    triggerNearViewport(true);
-    expect(screen.getByTestId('media-grid')).toBeTruthy();
-
-    mockUseMedia.mockClear();
-    mockUseDayCommentCounts.mockClear();
-
-    triggerNearViewport(false);
-    rerender(
-      <DaySection
-        day={dayFixture}
-        isActive={false}
-        isPreviousAdjacent={false}
-        isNextAdjacent={false}
-        isAdmin={false}
-        canPost={false}
-        authorizationError={null}
-        onVisible={vi.fn()}
-        onMediaClick={vi.fn()}
-      />
-    );
-
-    expect(screen.getByTestId('media-grid')).toBeTruthy();
-    expect(mockUseMedia).toHaveBeenLastCalledWith('day-1', 'once');
-    expect(mockUseDayCommentCounts).toHaveBeenLastCalledWith('day-1', 'once');
-  });
-
-  it('uses live mode for the active day and reports visibility', () => {
+  it('reports visibility when the day enters the active viewport', () => {
     const onVisible = vi.fn();
 
-    renderSection({ isActive: true, onVisible });
+    renderSection({ onVisible });
 
     triggerActiveViewport(true);
 
-    expect(screen.getByTestId('media-grid')).toBeTruthy();
-    expect(mockUseMedia).toHaveBeenLastCalledWith('day-1', 'live');
-    expect(mockUseDayCommentCounts).toHaveBeenLastCalledWith('day-1', 'live');
     expect(onVisible).toHaveBeenCalledWith('day-1');
   });
 
-  it('falls back to once-mode after an active day has already been activated', () => {
-    const { rerender } = renderSection({ isActive: true });
+  it('opens the editor controls for admins', () => {
+    renderSection({ isAdmin: true });
 
-    expect(screen.getByTestId('media-grid')).toBeTruthy();
-    expect(mockUseMedia).toHaveBeenLastCalledWith('day-1', 'live');
+    fireEvent.click(screen.getByTitle('Redigera text'));
 
-    mockUseMedia.mockClear();
-    mockUseDayCommentCounts.mockClear();
-
-    rerender(
-      <DaySection
-        day={dayFixture}
-        isActive={false}
-        isPreviousAdjacent={false}
-        isNextAdjacent={false}
-        isAdmin={false}
-        canPost={false}
-        authorizationError={null}
-        onVisible={vi.fn()}
-        onMediaClick={vi.fn()}
-      />
-    );
-
-    expect(screen.getByTestId('media-grid')).toBeTruthy();
-    expect(mockUseMedia).toHaveBeenLastCalledWith('day-1', 'once');
-    expect(mockUseDayCommentCounts).toHaveBeenLastCalledWith('day-1', 'once');
-  });
-
-  it('reuses the cached media layout to reserve a closer placeholder height', () => {
-    const cachedDay: Day = {
-      ...dayFixture,
-      id: 'day-cached',
-      title: 'Kyoto',
-    };
-    const cachedMedia: Media[] = Array.from({ length: 6 }, (_, index) => ({
-      ...mediaFixture[0],
-      id: `cached-${index}`,
-      dayId: 'day-cached',
-    }));
-
-    mockUseMedia.mockImplementation((dayId: string, mode: DataLoadMode) => ({
-      media: dayId === 'day-cached' && mode !== 'off' ? cachedMedia : mode === 'off' ? [] : mediaFixture,
-      loading: false,
-      error: null,
-    }));
-
-    const firstRender = renderSection({ day: cachedDay, isActive: true });
-    expect(screen.getByTestId('media-grid')).toBeTruthy();
-    firstRender.unmount();
-
-    renderSection({ day: cachedDay });
-
-    expect(screen.getByText('Bilderna laddas när du närmar dig dagen.')).toBeTruthy();
-    expect(screen.getAllByTestId('media-skeleton-tile')).toHaveLength(7);
+    expect(screen.getByPlaceholderText('Skriv något om dagen...')).toBeTruthy();
+    expect(screen.getByText('Spara')).toBeTruthy();
   });
 });
