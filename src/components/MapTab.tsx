@@ -10,11 +10,12 @@ import { formatDateSwedish } from '../utils/dateHelpers';
 import { preloadImageUrl } from '../utils/imagePreload';
 import {
   DEFAULT_MAP_CENTER,
+  getMapPhotoPoints,
   getJourneyPath,
   getMapBounds,
-  type DayStop,
   type MapBounds,
   type MapCoordinate,
+  type MapPhotoPoint,
 } from '../utils/mapMedia';
 import { createHankoClusterIcon, createHankoIcon, getHankoClusterSizeTier } from './HankoMarker';
 
@@ -42,93 +43,247 @@ interface ProjectedPoint {
   y: number;
 }
 
-type ClusteredStop =
-  | { type: 'stop'; stop: DayStop; index: number }
-  | { type: 'cluster'; stops: Array<{ stop: DayStop; index: number }>; coordinate: MapCoordinate };
+const FINAL_LAYOUT_SYNC_DELAY_MS = 160;
+const CLUSTER_LIGHTBOX_THRESHOLD = 12;
 
-const CLUSTER_DISABLE_ZOOM = 15;
+interface ClusterAccumulator {
+  points: Array<{ point: MapPhotoPoint; projected: ProjectedPoint }>;
+  centroid: ProjectedPoint;
+  minX: number;
+  maxX: number;
+  minY: number;
+  maxY: number;
+}
+
+type ClusteredPhotoResult =
+  | { type: 'photo'; point: MapPhotoPoint; projected: ProjectedPoint }
+  | { type: 'cluster'; points: MapPhotoPoint[]; coordinate: MapCoordinate };
+
+type RenderableMapItem =
+  | { type: 'photo'; point: MapPhotoPoint; coordinate: MapCoordinate; renderIndex: number }
+  | { type: 'cluster'; points: MapPhotoPoint[]; coordinate: MapCoordinate };
+
+const CLUSTER_DISABLE_ZOOM = 16;
+const OVERLAP_OFFSET_TRIGGER_PX = 10;
+const GOLDEN_ANGLE = 2.399963229728653;
 
 const getMaxClusterRadius = (zoom: number) => {
-  if (zoom >= 14) return 34;
-  if (zoom >= 12) return 44;
-  if (zoom >= 10) return 56;
-  return 72;
+  if (zoom >= 15) return 16;
+  if (zoom >= 13) return 22;
+  if (zoom >= 11) return 28;
+  if (zoom >= 9) return 36;
+  return 46;
 };
 
 const projectDistance = (left: ProjectedPoint, right: ProjectedPoint) =>
   Math.hypot(left.x - right.x, left.y - right.y);
 
-const averageCoordinate = (stops: Array<{ stop: DayStop }>): MapCoordinate => {
-  const totals = stops.reduce(
-    (acc, item) => {
-      acc.lat += item.stop.coordinate[0];
-      acc.lng += item.stop.coordinate[1];
+const averageCoordinate = (points: Array<{ coordinate: MapCoordinate }>): MapCoordinate => {
+  const totals = points.reduce(
+    (acc, point) => {
+      acc.lat += point.coordinate[0];
+      acc.lng += point.coordinate[1];
       return acc;
     },
     { lat: 0, lng: 0 },
   );
 
-  return [totals.lat / stops.length, totals.lng / stops.length];
+  return [totals.lat / points.length, totals.lng / points.length];
 };
 
-const buildClusteredStops = (
-  journeyStops: DayStop[],
+const averageProjectedPoint = (points: ProjectedPoint[]): ProjectedPoint => {
+  const totals = points.reduce(
+    (acc, point) => {
+      acc.x += point.x;
+      acc.y += point.y;
+      return acc;
+    },
+    { x: 0, y: 0 },
+  );
+
+  return {
+    x: totals.x / points.length,
+    y: totals.y / points.length,
+  };
+};
+
+const getMaxClusterSpan = (clusterRadius: number) => clusterRadius * 1.28;
+
+const createClusterAccumulator = (point: MapPhotoPoint, projected: ProjectedPoint): ClusterAccumulator => ({
+  points: [{ point, projected }],
+  centroid: projected,
+  minX: projected.x,
+  maxX: projected.x,
+  minY: projected.y,
+  maxY: projected.y,
+});
+
+const canJoinCluster = (
+  cluster: ClusterAccumulator,
+  candidate: ProjectedPoint,
+  clusterRadius: number,
+  maxClusterSpan: number,
+) => {
+  if (projectDistance(cluster.centroid, candidate) > clusterRadius) {
+    return false;
+  }
+
+  const nextMinX = Math.min(cluster.minX, candidate.x);
+  const nextMaxX = Math.max(cluster.maxX, candidate.x);
+  const nextMinY = Math.min(cluster.minY, candidate.y);
+  const nextMaxY = Math.max(cluster.maxY, candidate.y);
+
+  return nextMaxX - nextMinX <= maxClusterSpan && nextMaxY - nextMinY <= maxClusterSpan;
+};
+
+const addPointToCluster = (
+  cluster: ClusterAccumulator,
+  point: MapPhotoPoint,
+  projected: ProjectedPoint,
+) => {
+  cluster.points.push({ point, projected });
+  cluster.minX = Math.min(cluster.minX, projected.x);
+  cluster.maxX = Math.max(cluster.maxX, projected.x);
+  cluster.minY = Math.min(cluster.minY, projected.y);
+  cluster.maxY = Math.max(cluster.maxY, projected.y);
+  cluster.centroid = averageProjectedPoint(cluster.points.map((entry) => entry.projected));
+};
+
+const buildClusteredPhotoResults = (
+  photoPoints: MapPhotoPoint[],
   zoom: number,
   project: (coordinate: MapCoordinate, zoom: number) => ProjectedPoint,
-): ClusteredStop[] => {
-  if (zoom >= CLUSTER_DISABLE_ZOOM) {
-    return journeyStops.map((stop, index) => ({ type: 'stop', stop, index }));
-  }
-
+): ClusteredPhotoResult[] => {
   const clusterRadius = getMaxClusterRadius(zoom);
-  const projectedStops = journeyStops.map((stop, index) => ({
-    stop,
-    index,
-    projected: project(stop.coordinate, zoom),
+  const maxClusterSpan = getMaxClusterSpan(clusterRadius);
+  const projectedPoints = photoPoints.map((point) => ({
+    point,
+    projected: project(point.coordinate, zoom),
   }));
-  const visited = new Set<number>();
-  const results: ClusteredStop[] = [];
 
-  for (let startIndex = 0; startIndex < projectedStops.length; startIndex += 1) {
-    if (visited.has(startIndex)) continue;
-
-    const queue = [startIndex];
-    const clusterMembers: Array<{ stop: DayStop; index: number }> = [];
-    visited.add(startIndex);
-
-    while (queue.length > 0) {
-      const currentIndex = queue.shift()!;
-      const current = projectedStops[currentIndex];
-      clusterMembers.push({ stop: current.stop, index: current.index });
-
-      for (let candidateIndex = 0; candidateIndex < projectedStops.length; candidateIndex += 1) {
-        if (visited.has(candidateIndex)) continue;
-
-        const candidate = projectedStops[candidateIndex];
-        if (projectDistance(current.projected, candidate.projected) <= clusterRadius) {
-          visited.add(candidateIndex);
-          queue.push(candidateIndex);
-        }
-      }
-    }
-
-    if (clusterMembers.length === 1) {
-      results.push({
-        type: 'stop',
-        stop: clusterMembers[0].stop,
-        index: clusterMembers[0].index,
-      });
-      continue;
-    }
-
-    results.push({
-      type: 'cluster',
-      stops: clusterMembers,
-      coordinate: averageCoordinate(clusterMembers),
-    });
+  if (zoom >= CLUSTER_DISABLE_ZOOM) {
+    return projectedPoints.map(({ point, projected }) => ({
+      type: 'photo',
+      point,
+      projected,
+    }));
   }
 
-  return results;
+  const clusters: ClusterAccumulator[] = [];
+
+  projectedPoints.forEach(({ point, projected }) => {
+    let targetClusterIndex = -1;
+    let bestDistance = Number.POSITIVE_INFINITY;
+
+    clusters.forEach((cluster, index) => {
+      if (!canJoinCluster(cluster, projected, clusterRadius, maxClusterSpan)) {
+        return;
+      }
+
+      const distance = projectDistance(cluster.centroid, projected);
+      if (distance < bestDistance) {
+        targetClusterIndex = index;
+        bestDistance = distance;
+      }
+    });
+
+    if (targetClusterIndex === -1) {
+      clusters.push(createClusterAccumulator(point, projected));
+      return;
+    }
+
+    addPointToCluster(clusters[targetClusterIndex], point, projected);
+  });
+
+  return clusters.map((cluster) =>
+    cluster.points.length === 1
+      ? {
+          type: 'photo' as const,
+          point: cluster.points[0].point,
+          projected: cluster.points[0].projected,
+        }
+      : {
+          type: 'cluster' as const,
+          points: cluster.points.map((entry) => entry.point),
+          coordinate: averageCoordinate(cluster.points.map((entry) => entry.point)),
+        },
+  );
+};
+
+const resolveOverlappingPhotoCoordinates = (
+  photos: Array<{ point: MapPhotoPoint; projected: ProjectedPoint }>,
+  zoom: number,
+  unproject: (projected: ProjectedPoint, zoom: number) => MapCoordinate,
+) => {
+  const overlapGroups: Array<Array<{ point: MapPhotoPoint; projected: ProjectedPoint }>> = [];
+
+  photos.forEach((photo) => {
+    const existingGroup = overlapGroups.find((group) =>
+      group.every(
+        (entry) =>
+          projectDistance(entry.projected, photo.projected) <= OVERLAP_OFFSET_TRIGGER_PX,
+      ),
+    );
+
+    if (existingGroup) {
+      existingGroup.push(photo);
+      return;
+    }
+
+    overlapGroups.push([photo]);
+  });
+
+  return overlapGroups.flatMap((group) => {
+    if (group.length === 1) {
+      return [
+        {
+          point: group[0].point,
+          coordinate: group[0].point.coordinate,
+        },
+      ];
+    }
+
+    const center = averageProjectedPoint(group.map((entry) => entry.projected));
+
+    return group.map((entry, index) => {
+      const offsetDistance = 10 + index * 4;
+      const angle = index * GOLDEN_ANGLE;
+      const coordinate = unproject(
+        {
+          x: center.x + Math.cos(angle) * offsetDistance,
+          y: center.y + Math.sin(angle) * offsetDistance,
+        },
+        zoom,
+      );
+
+      return {
+        point: entry.point,
+        coordinate,
+      };
+    });
+  });
+};
+
+const buildRenderableMapItems = (
+  photoPoints: MapPhotoPoint[],
+  zoom: number,
+  project: (coordinate: MapCoordinate, zoom: number) => ProjectedPoint,
+  unproject: (projected: ProjectedPoint, zoom: number) => MapCoordinate,
+): RenderableMapItem[] => {
+  const clusteredResults = buildClusteredPhotoResults(photoPoints, zoom, project);
+  const photoResults = clusteredResults.filter((item) => item.type === 'photo');
+  const clusterResults = clusteredResults.filter((item) => item.type === 'cluster');
+  const resolvedPhotos = resolveOverlappingPhotoCoordinates(photoResults, zoom, unproject);
+
+  return [
+    ...clusterResults,
+    ...resolvedPhotos.map((item, renderIndex) => ({
+      type: 'photo' as const,
+      point: item.point,
+      coordinate: item.coordinate,
+      renderIndex,
+    })),
+  ];
 };
 
 const FitMapToBounds: React.FC<{ bounds: MapBounds | null; shouldFit: boolean }> = ({ bounds, shouldFit }) => {
@@ -174,10 +329,57 @@ const MapViewTracker: React.FC<{ onViewChange?: (view: MapViewState) => void }> 
   return null;
 };
 
+const MapLayoutSync: React.FC<{ containerRef: React.RefObject<HTMLDivElement | null> }> = ({ containerRef }) => {
+  const map = useMap();
+
+  React.useEffect(() => {
+    if (typeof window === 'undefined') {
+      return undefined;
+    }
+
+    const syncMapLayout = () => {
+      map.invalidateSize();
+    };
+
+    let firstFrameId = 0;
+    let secondFrameId = 0;
+
+    firstFrameId = window.requestAnimationFrame(() => {
+      syncMapLayout();
+      secondFrameId = window.requestAnimationFrame(() => {
+        syncMapLayout();
+      });
+    });
+
+    const timeoutId = window.setTimeout(() => {
+      syncMapLayout();
+    }, FINAL_LAYOUT_SYNC_DELAY_MS);
+
+    const container = containerRef.current;
+    let resizeObserver: ResizeObserver | null = null;
+
+    if (container && typeof ResizeObserver !== 'undefined') {
+      resizeObserver = new ResizeObserver(() => {
+        syncMapLayout();
+      });
+      resizeObserver.observe(container);
+    }
+
+    return () => {
+      window.cancelAnimationFrame(firstFrameId);
+      window.cancelAnimationFrame(secondFrameId);
+      window.clearTimeout(timeoutId);
+      resizeObserver?.disconnect();
+    };
+  }, [containerRef, map]);
+
+  return null;
+};
+
 const JourneyMarkers: React.FC<{
-  journeyStops: DayStop[];
+  photoPoints: MapPhotoPoint[];
   onMediaOpen?: (media: Media[], index: number) => void;
-}> = ({ journeyStops, onMediaOpen }) => {
+}> = ({ photoPoints, onMediaOpen }) => {
   const map = useMap();
   const [zoom, setZoom] = React.useState(() => map.getZoom());
 
@@ -185,25 +387,40 @@ const JourneyMarkers: React.FC<{
     zoomend: () => setZoom(map.getZoom()),
   });
 
-  const clusteredStops = React.useMemo(
-    () => buildClusteredStops(journeyStops, zoom, (coordinate, activeZoom) => map.project(coordinate, activeZoom)),
-    [journeyStops, map, zoom],
+  const renderableItems = React.useMemo(
+    () =>
+      buildRenderableMapItems(
+        photoPoints,
+        zoom,
+        (coordinate, activeZoom) => map.project(coordinate, activeZoom),
+        (projected, activeZoom) => {
+          const latLng = map.unproject(L.point(projected.x, projected.y), activeZoom);
+          return [latLng.lat, latLng.lng];
+        },
+      ),
+    [photoPoints, map, zoom],
   );
 
   return (
     <>
-      {clusteredStops.map((item) => {
+      {renderableItems.map((item) => {
         if (item.type === 'cluster') {
-          const count = item.stops.length;
-          const bounds = getMapBounds(item.stops.map((entry) => entry.stop));
+          const count = item.points.length;
+          const bounds = getMapBounds(item.points);
+          const clusterMedia = item.points.map((entry) => entry.media);
 
           return (
             <Marker
-              key={`cluster-${item.stops.map((entry) => entry.stop.dayId).join('-')}`}
+              key={`cluster-${item.points.map((entry) => entry.media.id).join('-')}`}
               position={item.coordinate}
               icon={createHankoClusterIcon(count, getHankoClusterSizeTier(count))}
               eventHandlers={{
                 click: () => {
+                  if (count <= CLUSTER_LIGHTBOX_THRESHOLD && onMediaOpen) {
+                    onMediaOpen(clusterMedia, 0);
+                    return;
+                  }
+
                   if (bounds) {
                     map.fitBounds(bounds, {
                       padding: [36, 36],
@@ -216,15 +433,16 @@ const JourneyMarkers: React.FC<{
           );
         }
 
-        const representativeMedia = item.stop.media[0];
-        const previewId = representativeMedia?.id ?? item.stop.dayId;
-        const previewSrc = representativeMedia?.thumbnailUrl;
+        const previewId = item.point.media.id;
+        const previewSrc = item.point.media.thumbnailUrl || item.point.media.url;
+        const dayMediaCount = item.point.dayMedia.length;
+        const dayMediaIndex = item.point.mediaIndex + 1;
 
         return (
           <Marker
-            key={item.stop.dayId}
-            position={item.stop.coordinate}
-            icon={createHankoIcon(item.index)}
+            key={item.point.media.id}
+            position={item.coordinate}
+            icon={createHankoIcon(item.renderIndex)}
             eventHandlers={{
               mouseover: () => {
                 if (previewSrc) {
@@ -239,7 +457,7 @@ const JourneyMarkers: React.FC<{
                   {previewSrc ? (
                     <img
                       src={previewSrc}
-                      alt={item.stop.dayId}
+                      alt={item.point.media.fileName}
                       className="polaroid-image"
                       loading="lazy"
                     />
@@ -252,17 +470,17 @@ const JourneyMarkers: React.FC<{
                 <div className="polaroid-caption">
                   <div className="polaroid-date">
                     <Calendar size={12} />
-                    <span>{formatDateSwedish(representativeMedia?.capturedAt || new Date())}</span>
+                    <span>{formatDateSwedish(item.point.media.capturedAt || new Date())}</span>
                   </div>
                   <p className="polaroid-count">
-                    {item.stop.media.length} {item.stop.media.length === 1 ? 'minne' : 'minnen'}
+                    {dayMediaCount === 1 ? '1 minne' : `${dayMediaIndex} av ${dayMediaCount} minnen`}
                   </p>
                 </div>
                 <button
                   type="button"
                   className="polaroid-action-btn"
                   data-testid={`map-open-media-${previewId}`}
-                  onClick={() => onMediaOpen?.(item.stop.media, 0)}
+                  onClick={() => onMediaOpen?.(item.point.dayMedia, item.point.mediaIndex)}
                 >
                   Upptack dagen
                 </button>
@@ -283,7 +501,9 @@ const MapTab: React.FC<MapTabProps> = ({
 }) => {
   const { media, loading, error } = useAllMedia({ enabled: true, live: false, limit: 1000 });
   const journeyStops = React.useMemo(() => getJourneyPath(media), [media]);
-  const bounds = React.useMemo(() => getMapBounds(journeyStops), [journeyStops]);
+  const photoPoints = React.useMemo(() => getMapPhotoPoints(media), [media]);
+  const bounds = React.useMemo(() => getMapBounds(photoPoints), [photoPoints]);
+  const mapWrapperRef = React.useRef<HTMLDivElement | null>(null);
   const journeyCoordinates = React.useMemo(
     () => journeyStops.map((stop) => stop.coordinate),
     [journeyStops],
@@ -299,7 +519,7 @@ const MapTab: React.FC<MapTabProps> = ({
         </p>
       </div>
 
-      <div className="map-wrapper">
+      <div className="map-wrapper" ref={mapWrapperRef}>
         {loading ? (
           <div className="loading-state map-state" data-testid="map-loading-state">
             <Loader2 className="spinner" size={32} />
@@ -310,7 +530,7 @@ const MapTab: React.FC<MapTabProps> = ({
             <TriangleAlert size={28} />
             <p>{error}</p>
           </div>
-        ) : journeyStops.length === 0 ? (
+        ) : photoPoints.length === 0 ? (
           <div className="empty-state map-state" data-testid="map-empty-state">
             <MapPin size={32} />
             <h3>{hasAnyMedia ? 'Ingen platsdata hittades' : 'Ingen media \u00e4n'}</h3>
@@ -327,6 +547,7 @@ const MapTab: React.FC<MapTabProps> = ({
             scrollWheelZoom
             className="leaflet-container"
           >
+            <MapLayoutSync containerRef={mapWrapperRef} />
             <FitMapToBounds bounds={bounds} shouldFit={!hasPersistedView} />
             <MapViewTracker onViewChange={onViewChange} />
             <TileLayer
@@ -362,7 +583,7 @@ const MapTab: React.FC<MapTabProps> = ({
               </>
             )}
 
-            <JourneyMarkers journeyStops={journeyStops} onMediaOpen={onMediaOpen} />
+            <JourneyMarkers photoPoints={photoPoints} onMediaOpen={onMediaOpen} />
           </MapContainer>
         )}
       </div>
@@ -423,10 +644,17 @@ const MapTab: React.FC<MapTabProps> = ({
         }
 
         .leaflet-container {
-          height: 100%;
-          width: 100%;
+          position: absolute;
+          inset: 0;
+          height: auto;
+          width: auto;
           z-index: 10;
           background: #f8f6f1;
+        }
+
+        .leaflet-container .leaflet-tile-pane img,
+        .leaflet-container img.leaflet-tile {
+          mix-blend-mode: normal;
         }
 
         .red-thread-base {
